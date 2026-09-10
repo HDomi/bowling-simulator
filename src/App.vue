@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import BallEditor from '@/components/BallEditor.vue'
 import BallPanel from '@/components/BallPanel.vue'
+import PatternPanel from '@/components/PatternPanel.vue'
 import BottomBar from '@/components/BottomBar.vue'
 import ReleasePanel from '@/components/ReleasePanel.vue'
+import LineSearchPanel from '@/components/LineSearchPanel.vue'
+import OilProfileChart from '@/components/OilProfileChart.vue'
 import ResultPanel from '@/components/ResultPanel.vue'
 import BallSetup from '@/components/BallSetup.vue'
 import IntroSplash from '@/components/IntroSplash.vue'
 import TopBar from '@/components/TopBar.vue'
+import { SHARE_PARAM } from '@/domain/share'
 import { useBallsStore } from '@/stores/balls'
 import { useSimulatorStore } from '@/stores/simulator'
 import { storeToRefs } from 'pinia'
@@ -74,6 +78,15 @@ watch(hasBalls, () => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKey)
+
+  // 공유 링크로 들어왔으면 그 상태를 얹고 주소는 정리한다.
+  const shared = new URL(window.location.href).searchParams.get(SHARE_PARAM)
+  if (shared && store.applyShared(shared)) {
+    const clean = new URL(window.location.href)
+    clean.searchParams.delete(SHARE_PARAM)
+    window.history.replaceState(null, '', clean.toString())
+    introActive.value = false
+  }
 })
 
 onUnmounted(() => {
@@ -90,8 +103,11 @@ onUnmounted(() => {
   <div v-else key="lane" class="simulator-workspace flex h-full min-h-0 flex-col bg-paper text-ink">
     <TopBar />
     <div class="workspace-body flex min-h-0 flex-1 flex-col lg:flex-row">
-      <aside class="ball-sidebar hidden w-64 shrink-0 overflow-y-auto border-r border-ink/15 p-4 lg:block">
-        <BallPanel />
+      <aside class="ball-sidebar hidden w-64 shrink-0 overflow-y-auto border-r border-ink/15 lg:block">
+        <div class="p-4">
+          <BallPanel />
+        </div>
+        <PatternPanel />
       </aside>
       <main class="lane-stage relative min-h-[50vh] min-w-0 flex-1">
         <div class="lane-caption"><span class="eyebrow">02 / THE MOTION STUDIO</span><span>LANE 01</span></div>
@@ -111,6 +127,10 @@ onUnmounted(() => {
             </button>
           </div>
           <BallPanel />
+          <!-- 좌측 사이드바가 모바일에서 숨겨지므로 패턴 편집기도 여기 넣는다. -->
+          <div class="-mx-4 mt-4">
+            <PatternPanel />
+          </div>
         </div>
         <p class="pointer-events-none absolute bottom-3 left-3 max-w-sm font-ui text-[11px] text-muted">
           USBC 실측 데이터 기반 근사 모델. 실전 예측용이 아님. 테스트 패턴: WB Montreal 41'.
@@ -119,6 +139,8 @@ onUnmounted(() => {
       <aside class="release-sidebar w-full min-w-0 shrink-0 overflow-x-hidden border-t border-ink/15 lg:w-64 lg:border-t-0 lg:border-l">
         <ReleasePanel />
         <ResultPanel />
+        <OilProfileChart />
+        <LineSearchPanel />
       </aside>
     </div>
     <BottomBar />

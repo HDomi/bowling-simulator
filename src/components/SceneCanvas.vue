@@ -7,7 +7,7 @@ import { useSimulatorStore } from '@/stores/simulator'
 const store = useSimulatorStore()
 const {
   ball, pattern, rollNonce, resetNonce, sweepNonce, sweepKeepIds, ballNumber,
-  cameraPreset, result, preview, comparePreview, isRolling,
+  cameraPreset, result, preview, comparePreview, isRolling, candidateShots,
 } = storeToRefs(store)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let scene: BowlingScene | null = null
@@ -28,6 +28,7 @@ onMounted(async () => {
     instance.applyCameraPreset(cameraPreset.value)
     instance.showPreview(preview.value)
     instance.showGhost(comparePreview.value)
+    instance.showCandidates(candidateShots.value)
     observer = new ResizeObserver(handleResize)
     observer.observe(canvasRef.value)
     loading.value = false
@@ -62,6 +63,10 @@ watch(
 watch(comparePreview, (shot) => {
   scene?.showGhost(shot)
 })
+
+watch(candidateShots, (shots) => {
+  scene?.showCandidates(shots)
+}, { deep: false })
 
 /** 외관 필드만 묶은 키. 무게 슬라이더로 RG만 바뀔 때 텍스처를 다시 굽지 않는다. */
 const lookKey = computed(

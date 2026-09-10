@@ -97,6 +97,50 @@ export function depositKegelPasses(passes: KegelPass[], patternEndFt: number): n
 }
 
 /**
+ * 보드 방향으로 가우시안 스무딩을 건다.
+ *
+ * 오일 머신은 브러시가 오일을 옆으로 끌고 나가기 때문에 패스 경계가 칼같이
+ * 끊기지 않는다(시트의 buffer 항목). 균등 분배만 하면 단면이 계단이 되어
+ * "몇 보드에 놓느냐"의 차이가 죽는다.
+ *
+ * 레인 밖으로 번진 몫은 버린다. 거터 쪽 오일이 자연히 얇아진다.
+ *
+ * @param {number[][]} grid - 격자
+ * @param {number} sigma - 번지는 정도(보드 단위)
+ * @returns {number[][]} 스무딩된 격자
+ */
+export function smoothBoards(grid: number[][], sigma: number): number[][] {
+  if (sigma <= 0) {
+    return grid
+  }
+  const radius = Math.max(1, Math.ceil(sigma * 3))
+  const kernel: number[] = []
+  let sum = 0
+  for (let i = -radius; i <= radius; i += 1) {
+    const weight = Math.exp(-(i * i) / (2 * sigma * sigma))
+    kernel.push(weight)
+    sum += weight
+  }
+  const norm = kernel.map((weight) => weight / sum)
+
+  return grid.map((row) => {
+    const out = new Array<number>(row.length).fill(0)
+    for (let board = 0; board < row.length; board += 1) {
+      let acc = 0
+      for (let k = -radius; k <= radius; k += 1) {
+        const index = board + k
+        if (index < 0 || index >= row.length) {
+          continue
+        }
+        acc += row[index] * norm[k + radius]
+      }
+      out[board] = acc
+    }
+    return out
+  })
+}
+
+/**
  * 격자 최댓값으로 나눠 0~1 오일량으로 만든다.
  * @param {number[][]} grid - 원본 격자
  * @returns {number[][]} 정규화 격자

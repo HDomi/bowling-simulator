@@ -56,6 +56,23 @@ const UP = new Vector3(0, 1, 0)
  *
  * 볼 로컬 좌표 관례는 {@link rgAxes} 문서를 따른다(+Y 핀 축, +X MB 축).
  */
+/**
+ * 껍질 색의 보색을 구한다.
+ *
+ * 코어는 사용자가 색을 고르지 않는다. 껍질이 어떤 색이든 대비가 서도록
+ * 색상환 반대편을 쓰고, 채도와 명도는 식별에 좋은 값으로 고정한다.
+ *
+ * @param {string} hex - 껍질 기본색
+ * @returns {Color} 보색
+ */
+function complementaryColor(hex: string): Color {
+  const hsl = { h: 0, s: 0, l: 0 }
+  new Color(hex).getHSL(hsl)
+  // 무채색 껍질은 보색이 의미 없으므로 청록으로 고정한다.
+  const hue = hsl.s < 0.08 ? 0.5 : (hsl.h + 0.5) % 1
+  return new Color().setHSL(hue, 0.62, 0.42)
+}
+
 export class BallViewer {
   private renderer: WebGLRenderer
   private scene = new Scene()
@@ -120,30 +137,25 @@ export class BallViewer {
     this.core = new Mesh(
       new SphereGeometry(1, 48, 32),
       new MeshStandardMaterial({
-        color: new Color(LIGHTING.neonCyan).multiplyScalar(0.35),
-        emissive: new Color(LIGHTING.neonCyan),
-        emissiveIntensity: 0.08,
-        roughness: 0.6,
+        roughness: 0.55,
         metalness: 0,
-        // 환경광을 죽여야 회백색으로 뜨지 않고 시안이 남는다.
-        envMapIntensity: 0.15,
-        transparent: true,
-        opacity: 0.9,
+        // 환경광을 죽여야 회백색으로 뜨지 않고 코어 색이 남는다.
+        envMapIntensity: 0.12,
+        transparent: false,
+        opacity: 1,
       }),
     )
     this.core.renderOrder = 0
     this.coreWire = new Mesh(
       new SphereGeometry(1, 20, 14),
       new MeshStandardMaterial({
-        color: new Color(LIGHTING.neonCyan),
-        emissive: new Color(LIGHTING.neonCyan),
-        emissiveIntensity: 0.05,
         wireframe: true,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.45,
       }),
     )
     this.coreWire.renderOrder = 1
+    this.applyCoreColor(ball)
     this.axes = this.createAxes()
     this.axes.renderOrder = 2
     this.markerGroup.renderOrder = 3
@@ -183,6 +195,23 @@ export class BallViewer {
     const previous = this.shell.material
     this.shell.material = this.makeShellMaterial(ball)
     disposeBallMaterial(previous)
+    this.applyCoreColor(ball)
+  }
+
+  /**
+   * 코어를 껍질 기본색의 보색으로 칠한다.
+   * @param {BallLook} look - 볼 외관
+   */
+  private applyCoreColor(look: BallLook): void {
+    const base = complementaryColor(look.colors[0])
+    this.core.material.color.copy(base)
+    this.core.material.emissive.copy(base)
+    this.core.material.emissiveIntensity = 0.22
+    this.core.material.needsUpdate = true
+    this.coreWire.material.color.copy(base).offsetHSL(0, 0, 0.25)
+    this.coreWire.material.emissive.copy(base).offsetHSL(0, 0, 0.25)
+    this.coreWire.material.emissiveIntensity = 0.1
+    this.coreWire.material.needsUpdate = true
   }
 
   /**
@@ -193,7 +222,7 @@ export class BallViewer {
   private makeShellMaterial(look: BallLook): MeshPhysicalMaterial {
     const material = createBallMaterial(look, { holes: false })
     material.transparent = true
-    material.opacity = 0.42
+    material.opacity = 0.52
     material.depthWrite = false
     // 클리어코트·환경 반사가 반투명 껍질에서 회백색 막으로 떠서 코어를 가린다. 뷰어에선 뺀다.
     material.clearcoat = 0

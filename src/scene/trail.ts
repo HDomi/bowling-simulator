@@ -9,12 +9,16 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 const SKID = new Color('#7b8a7d')
 const HOOK = new Color('#b1743f')
 const BACKEND = new Color('#a64b35')
-/** 비교용 고스트 궤적. 구간 색 없이 흐린 크림색 점선이다. */
+/** 라인 탐색 후보. 여러 개를 옅게 겹쳐 그린다. */
+const CANDIDATE = new Color('#c98a4b')
+/** 비교용 고스트 궤적. 구간 색 없이 흐린 잉크색이다. */
 const GHOST = new Color('#6c7265')
 
 export type TrailOptions = {
   /** true면 직전 볼의 비교 궤적으로 그린다. */
   ghost?: boolean
+  /** 라인 탐색 후보. 얇고 옅게 여러 개 겹쳐 그린다. */
+  candidate?: boolean
 }
 
 /**
@@ -35,13 +39,16 @@ export function createTrail(
   const colors: number[] = []
   const color = new Color()
   const ghost = options.ghost === true
+  const candidate = options.candidate === true
 
   for (const sample of result.path) {
     const pos = sampleToBallPos(sample, BALL_RADIUS)
     // 고스트는 본 궤적보다 살짝 낮게 깔아 겹칠 때 본 궤적이 위로 보인다.
-    points.push(pos.x, pos.y + (ghost ? 0.008 : 0.012), pos.z)
+    points.push(pos.x, pos.y + (candidate ? 0.005 : ghost ? 0.008 : 0.012), pos.z)
     const yFt = sample.y / FT
-    if (ghost) {
+    if (candidate) {
+      color.copy(CANDIDATE)
+    } else if (ghost) {
       color.copy(GHOST)
     } else if (yFt < result.phases.skidEnd) {
       color.copy(SKID)
@@ -59,9 +66,9 @@ export function createTrail(
 
   const material = new LineMaterial({
     vertexColors: true,
-    linewidth: ghost ? 2.2 : 3.2,
+    linewidth: candidate ? 1.6 : ghost ? 2.2 : 3.2,
     transparent: true,
-    opacity: ghost ? 0.55 : 0.95,
+    opacity: candidate ? 0.42 : ghost ? 0.55 : 0.95,
     worldUnits: false,
     dashed: ghost,
     dashSize: 0.28,

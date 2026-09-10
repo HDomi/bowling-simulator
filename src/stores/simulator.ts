@@ -2,16 +2,29 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { DEFAULT_RELEASE, HARRY } from '@/domain/constants'
 import { defaultLineForHand, mirrorBoard, type Hand } from '@/domain/hand'
-import { getPatternById, PATTERN_PRESETS } from '@/domain/patterns/presets'
+import {
+  createHousePattern,
+  DEFAULT_HOUSE,
+  getPatternById,
+  PATTERN_PRESETS,
+} from '@/domain/patterns/presets'
 import { simulateShot } from '@/domain/physics/simulate'
+import { searchLines, type LineCandidate } from '@/domain/physics/search'
 import { getReleaseStyleById, matchReleaseStyleId } from '@/domain/styles'
 import { kmhToMph, type SpeedUnit } from '@/domain/units'
+import { decodeShare, encodeShare, packBall, SHARE_PARAM, type SharedState } from '@/domain/share'
 import { useBallsStore } from '@/stores/balls'
 import type { CameraPreset } from '@/scene/BowlingScene'
 import type { ReleaseInput, ShotResult } from '@/domain/types'
 
 /** 핀 번호 전체. */
 const ALL_PINS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+/** 3D에 겹쳐 보여줄 후보 궤적 수. 너무 많으면 다발이 뭉개진다. */
+const CANDIDATE_PREVIEW_COUNT = 8
+
+/** 직접 조절 패턴의 id. */
+export const CUSTOM_PATTERN_ID = 'custom'
 
 export const useSimulatorStore = defineStore('simulator', () => {
   const ballsStore = useBallsStore()
@@ -20,7 +33,31 @@ export const useSimulatorStore = defineStore('simulator', () => {
   /** 직전 볼(비교용). 없으면 null. */
   const compareBall = computed(() => ballsStore.simCompareBall)
   const patternId = ref('montreal')
-  const pattern = computed(() => getPatternById(patternId.value))
+
+  /* ── 직접 조절 패턴 ── */
+  const houseDistanceFt = ref<number>(DEFAULT_HOUSE.distanceFt)
+  const houseVolume = ref<number>(DEFAULT_HOUSE.volume)
+  const houseRatio = ref<number>(DEFAULT_HOUSE.ratio)
+  const customPattern = computed(() =>
+    createHousePattern(houseDistanceFt.value, houseVolume.value, houseRatio.value),
+  )
+  const isCustomPattern = computed(() => patternId.value === CUSTOM_PATTERN_ID)
+  const pattern = computed(() =>
+    isCustomPattern.value ? customPattern.value : getPatternById(patternId.value),
+  )
+
+  /** 패턴 고르기 목록. 프리셋 뒤에 직접 조절을 붙인다. */
+  const patternOptions = computed(() => [
+    ...PATTERN_PRESETS.map((item) => ({ id: item.id, name: item.name })),
+    { id: CUSTOM_PATTERN_ID, name: '직접 조절' },
+  ])
+
+  /** 지금 패턴의 보드별 오일 단면. 20ft 지점을 본다. */
+  const oilProfile = computed(() => {
+    const grid = pattern.value.grid
+    const rowIndex = Math.min(grid.length - 1, Math.round(20 / pattern.value.segmentFt))
+    return grid[rowIndex] ?? []
+  })
   const speedMph = ref<number>(kmhToMph(DEFAULT_RELEASE.speedKmh))
   const revRate = ref<number>(DEFAULT_RELEASE.revRate)
   const axisRotation = ref<number>(HARRY.axisRotation)
@@ -57,6 +94,24 @@ export const useSimulatorStore = defineStore('simulator', () => {
   const standingPins = ref<number[]>([])
   /** 핀세터가 끝나면 프레임을 끝낼지. 스트라이크 뒤에 쓴다. */
   const pendingFrameEnd = ref(false)
+
+  /* ── 라인 탐색 ── */
+  /** 포켓에 드는 라인 후보. 점수 내림차순이다. */
+  const searchResults = ref<LineCandidate[]>([])
+  /** 탐색이 도는 중인지. */
+  const isSearching = ref(false)
+  /** 3D에 겹쳐 그릴 후보 궤적. 상위 몇 개만 쓴다. */
+  const candidateShots = computed(() =>
+    searchResults.value
+      .slice(0, CANDIDATE_PREVIEW_COUNT)
+      .map((line) =>
+        simulateShot(ball.value, pattern.value, {
+          ...release.value,
+          releaseBoard: line.releaseBoard,
+          targetBoard: line.targetBoard,
+        }),
+      ),
+  )
 
   const presets = PATTERN_PRESETS
 
@@ -111,6 +166,90 @@ export const useSimulatorStore = defineStore('simulator', () => {
   )
 
   /**
+   * 지금 상태를 담은 공유 링크를 만든다.
+   * @returns {string} 절대 URL
+   */
+  function shareUrl(): string {
+    const state: SharedState = {
+      b: packBall(ballsStore.activeBall),
+      p: isCustomPattern.value
+        ? {
+            id: CUSTOM_PATTERN_ID,
+            d: houseDistanceFt.value,
+            v: houseVolume.value,
+            r: houseRatio.value,
+          }
+        : { id: patternId.value },
+      r: {
+        s: speedMph.value,
+        rv: revRate.value,
+        ar: axisRotation.value,
+        at: axisTilt.value,
+        rb: releaseBoard.value,
+        tb: targetBoard.value,
+        h: hand.value,
+      },
+    }
+    const url = new URL(window.location.href)
+    url.hash = ''
+    url.searchParams.set(SHARE_PARAM, encodeShare(state))
+    return url.toString()
+  }
+
+  /**
+   * 공유 링크의 상태를 적용한다. 볼은 새로 추가하고 활성으로 만든다.
+   * @param {string} encoded - URL 파라미터 값
+   * @returns {boolean} 적용했으면 true
+   */
+  function applyShared(encoded: string): boolean {
+    const state = decodeShare(encoded)
+    if (!state) {
+      return false
+    }
+    ballsStore.addBall({
+      name: state.b.n,
+      weightLb: state.b.w,
+      rg: state.b.rg,
+      diff: state.b.df,
+      cover: state.b.cv,
+      grit: state.b.gr,
+      colors: [state.b.c0, state.b.c1],
+      pinToCg: state.b.pc,
+    })
+    if (state.p.id === CUSTOM_PATTERN_ID) {
+      houseDistanceFt.value = state.p.d ?? DEFAULT_HOUSE.distanceFt
+      houseVolume.value = state.p.v ?? DEFAULT_HOUSE.volume
+      houseRatio.value = state.p.r ?? DEFAULT_HOUSE.ratio
+    }
+    patternId.value = state.p.id
+    speedMph.value = state.r.s
+    revRate.value = state.r.rv
+    axisRotation.value = state.r.ar
+    axisTilt.value = state.r.at
+    hand.value = state.r.h
+    releaseBoard.value = state.r.rb
+    targetBoard.value = state.r.tb
+    return true
+  }
+
+  /**
+   * 직접 조절 패턴 슬라이더를 기본값으로 되돌린다.
+   */
+  function resetHousePattern(): void {
+    houseDistanceFt.value = DEFAULT_HOUSE.distanceFt
+    houseVolume.value = DEFAULT_HOUSE.volume
+    houseRatio.value = DEFAULT_HOUSE.ratio
+  }
+
+  /**
+   * 지금 고른 프리셋을 직접 조절 패턴의 출발점으로 삼는다.
+   */
+  function forkPatternToCustom(): void {
+    houseDistanceFt.value = Math.round(pattern.value.distanceFt)
+    patternId.value = CUSTOM_PATTERN_ID
+  }
+
+  /**
    * 릴리즈 스타일 프리셋을 적용한다.
    * @param {string} id - 스타일 id
    */
@@ -123,6 +262,39 @@ export const useSimulatorStore = defineStore('simulator', () => {
     revRate.value = style.revRate
     axisRotation.value = style.axisRotation
     axisTilt.value = style.axisTilt
+  }
+
+  /**
+   * 릴리즈 보드 × 타겟 보드를 모두 굴려보고 포켓에 드는 라인을 찾는다.
+   *
+   * 1,521 조합이 300ms 안쪽이라 메인 스레드에서 돌린다.
+   */
+  function runSearch(): void {
+    if (isSearching.value || !ballsStore.hasBalls) {
+      return
+    }
+    isSearching.value = true
+    try {
+      searchResults.value = searchLines(ball.value, pattern.value, release.value)
+    } finally {
+      isSearching.value = false
+    }
+  }
+
+  /**
+   * 찾은 라인을 릴리즈 슬라이더에 적용한다.
+   * @param {LineCandidate} line - 라인 후보
+   */
+  function applyLine(line: LineCandidate): void {
+    releaseBoard.value = line.releaseBoard
+    targetBoard.value = line.targetBoard
+  }
+
+  /**
+   * 탐색 결과를 지운다.
+   */
+  function clearSearch(): void {
+    searchResults.value = []
   }
 
   /**
@@ -253,6 +425,12 @@ export const useSimulatorStore = defineStore('simulator', () => {
     compareBall,
     patternId,
     pattern,
+    patternOptions,
+    isCustomPattern,
+    houseDistanceFt,
+    houseVolume,
+    houseRatio,
+    oilProfile,
     speedMph,
     revRate,
     axisRotation,
@@ -276,6 +454,9 @@ export const useSimulatorStore = defineStore('simulator', () => {
     pinsetterRunning,
     standingPins,
     pendingFrameEnd,
+    searchResults,
+    isSearching,
+    candidateShots,
     canRelease,
     frameLabel,
     presets,
@@ -283,6 +464,13 @@ export const useSimulatorStore = defineStore('simulator', () => {
     release,
     preview,
     comparePreview,
+    shareUrl,
+    applyShared,
+    resetHousePattern,
+    forkPatternToCustom,
+    runSearch,
+    applyLine,
+    clearSearch,
     startFrame,
     releaseBall,
     finishPins,

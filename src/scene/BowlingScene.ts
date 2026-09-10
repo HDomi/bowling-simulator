@@ -69,6 +69,8 @@ export class BowlingScene {
   private onSweepDone: (() => void) | null = null
   /** 대기 상태를 되돌릴 때 쓰는 마지막 예상 궤적. */
   private lastPreview: ShotResult | null = null
+  /** 라인 탐색 후보 궤적. */
+  private candidates: Line2[] = []
   /** 볼 시점이 아닐 때 공을 보여줄지. */
   private pathBallShouldShow = true
   private pinTime = 0
@@ -178,6 +180,28 @@ export class BowlingScene {
     const ghost = this.makeTrail(result, true)
     this.scene.add(ghost)
     this.ghost = ghost
+  }
+
+  /**
+   * 라인 탐색 결과를 레인 위에 겹쳐 그린다.
+   * @param {ShotResult[]} shots - 후보 궤적. 빈 배열이면 지운다.
+   */
+  showCandidates(shots: ShotResult[]): void {
+    for (const line of this.candidates) {
+      this.scene.remove(line)
+      disposeTrail(line)
+    }
+    this.candidates = []
+    for (const shot of shots) {
+      const line = createTrail(
+        shot,
+        Math.max(this.canvas.clientWidth, 1),
+        Math.max(this.canvas.clientHeight, 1),
+        { candidate: true },
+      )
+      this.scene.add(line)
+      this.candidates.push(line)
+    }
   }
 
   /**
@@ -333,6 +357,7 @@ export class BowlingScene {
     cancelAnimationFrame(this.animFrame)
     this.clearTrail()
     this.showGhost(null)
+    this.showCandidates([])
     this.pinDeck.dispose()
     this.controls.dispose()
     this.renderer.dispose()

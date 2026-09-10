@@ -68,12 +68,12 @@ export const DEFAULT_DIFF = 0.048
  * 기울기(-0.096 ~ -0.156 in/ft, 약 0.5~0.7°)가 거의 직선인 것으로 보아 완만한
  * 라인이었다고 보고, 그 조건에서 Figure 7 지표가 모두 범위에 드는 라인을 쓴다.
  *
- * 릴리즈와 타겟 차이는 6보드로, 15ft 화살표까지 약 2°다. 275rpm 기준으로
+ * 릴리즈와 타겟 차이는 5보드로, 15ft 화살표까지 약 1.7°다. 275rpm 기준으로
  * 되돌릴 수 있는 각도이며, 이보다 벌리면 훅이 모자라 거터로 나간다.
  */
 export const DEFAULT_LINE = {
-  releaseBoard: 20,
-  targetBoard: 14,
+  releaseBoard: 18,
+  targetBoard: 13,
 } as const
 
 /** USBC 로봇 투구기 "Harry"의 릴리즈 조건. 시뮬 기본값이자 검증 기준이다. */
@@ -244,6 +244,28 @@ export const PINSETTER = {
   /** 스위프바 크기. */
   barHeight: 0.2,
   barThickness: 0.05,
+} as const
+
+/**
+ * 오일이 보드 방향으로 번지는 정도(보드 단위 표준편차).
+ *
+ * Kegel 시트의 buffer에 대응한다. 0이면 패스 경계가 계단처럼 끊긴다.
+ */
+export const OIL_BOARD_SIGMA = 2.2
+
+/**
+ * 포켓 판정 기준.
+ *
+ * 오른손 포켓(1-3번 사이)은 약 17.5 보드로 알려져 있다. 진입각은 USBC Figure 7의
+ * 실측 각도 변화 범위(2.06~4.89°) 안에서 잡았다. 그보다 큰 각은 이 모델의
+ * 근사 범위 밖이라 더 높게 쳐주지 않는다.
+ */
+export const POCKET = {
+  board: 17.5,
+  /** 이만큼 벗어나면 포켓이 아니라고 본다. */
+  toleranceBoards: 2.6,
+  minAngleDeg: 2.0,
+  idealAngleDeg: 4.5,
 } as const
 
 export const PIN_DOWN_TILT_DEG = 30

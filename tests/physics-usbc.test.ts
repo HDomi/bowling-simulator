@@ -236,18 +236,18 @@ describe('릴리즈 스타일 프리셋', () => {
 })
 
 describe('손(좌/우)', () => {
-  it('오른손 기본 라인은 20번에서 나와 14번을 본다', () => {
-    expect(RIGHT_HAND_LINE.releaseBoard).toBe(20)
-    expect(RIGHT_HAND_LINE.targetBoard).toBe(14)
+  it('오른손 기본 라인은 18번에서 나와 13번을 본다', () => {
+    expect(RIGHT_HAND_LINE.releaseBoard).toBe(18)
+    expect(RIGHT_HAND_LINE.targetBoard).toBe(13)
     expect(defaultLineForHand('right')).toEqual({
-      releaseBoard: 20,
-      targetBoard: 14,
+      releaseBoard: 18,
+      targetBoard: 13,
     })
   })
 
   it('왼손 기본 라인은 오른손의 좌우 대칭이다', () => {
-    expect(LEFT_HAND_LINE.releaseBoard).toBe(20)
-    expect(LEFT_HAND_LINE.targetBoard).toBe(26)
+    expect(LEFT_HAND_LINE.releaseBoard).toBe(22)
+    expect(LEFT_HAND_LINE.targetBoard).toBe(27)
   })
 
   it('슬라이더 왼쪽은 레인 왼쪽(보드 39)이다', () => {

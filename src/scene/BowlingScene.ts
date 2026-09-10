@@ -11,7 +11,13 @@ import type { PathSample, Pattern, ShotResult } from '@/domain/types'
 import { physXToThree, sampleToBallPos } from '@/scene/coords'
 import { CEILING_GROUP_NAME, createAlley } from '@/scene/createAlley'
 import { createPinDeck, SWEEP_BAR_NAME } from '@/scene/createPinDeck'
-import { applyBallLook, createBallMesh, DEFAULT_BALL_LOOK, type BallLook } from '@/scene/createBallMesh'
+import {
+  applyBallLook,
+  applyPaintTexture,
+  createBallMesh,
+  DEFAULT_BALL_LOOK,
+  type BallLook,
+} from '@/scene/createBallMesh'
 import { createLane } from '@/scene/createLane'
 import { createLights } from '@/scene/createLights'
 import { createOilOverlay, updateOilOverlay } from '@/scene/oilTexture'
@@ -64,6 +70,9 @@ export class BowlingScene {
   private ghost: Line2 | null = null
   private shot: ShotResult | null = null
   private ballWeightLb: number = DEFAULT_BALL_WEIGHT_LB
+  private ballLook: BallLook = DEFAULT_BALL_LOOK
+  /** 페인팅 텍스처. null이면 절차적 텍스처를 쓴다. */
+  private paint: HTMLCanvasElement | null = null
   private playTime = 0
   private phase: 'idle' | 'roll' | 'gutter' | 'pins' | 'sweep' = 'idle'
   private onSweepDone: (() => void) | null = null
@@ -160,6 +169,11 @@ export class BowlingScene {
    * @param {BallLook} look - 볼 외관
    */
   setBallLook(look: BallLook): void {
+    this.ballLook = look
+    if (this.paint) {
+      // 페인팅이 있으면 절차적 텍스처를 덮지 않는다.
+      return
+    }
     applyBallLook(this.pathBall, look)
     this.pinDeck.setBallLook(look)
   }
@@ -180,6 +194,16 @@ export class BowlingScene {
     const ghost = this.makeTrail(result, true)
     this.scene.add(ghost)
     this.ghost = ghost
+  }
+
+  /**
+   * 사용자가 칠한 페인팅을 볼에 입힌다. null이면 절차적 텍스처로 되돌린다.
+   * @param {HTMLCanvasElement | null} paint - 합성된 페인팅 캔버스
+   */
+  setPaintTexture(paint: HTMLCanvasElement | null): void {
+    this.paint = paint
+    applyPaintTexture(this.pathBall, paint, this.ballLook)
+    this.pinDeck.setPaintTexture(paint, this.ballLook)
   }
 
   /**

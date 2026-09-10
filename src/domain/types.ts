@@ -26,6 +26,8 @@ export type Ball = {
   pinToCg?: number
   layout?: Layout
   colors: [string, string]
+  /** 페인팅 텍스처가 있는지. 실제 Blob은 IndexedDB paints store에 있다. */
+  hasPaint?: boolean
 }
 
 export type Bowler = {

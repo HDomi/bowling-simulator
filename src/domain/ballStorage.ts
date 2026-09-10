@@ -34,6 +34,44 @@ export function browserStorage(): KeyValueStorage | null {
 }
 
 /**
+ * 볼 하나를 검사·정리한다. 규격을 벗어나면 null이다.
+ * @param {unknown} raw - 저장소에서 읽은 값
+ * @returns {Ball | null} 정리된 볼
+ */
+export function sanitizeBall(raw: unknown): Ball | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const ball = raw as Ball
+  if (typeof ball.id !== 'string' || ball.id.length === 0) {
+    return null
+  }
+  if (validateBall(ball).length > 0) {
+    return null
+  }
+  return {
+    id: ball.id,
+    name: ball.name.trim(),
+    weightLb: ball.weightLb,
+    rg: ball.rg,
+    diff: ball.diff,
+    intDiff: ball.intDiff,
+    cover: ball.cover,
+    grit: ball.grit,
+    pinToCg: ball.pinToCg,
+    layout: ball.layout
+      ? {
+          drillAngle: ball.layout.drillAngle,
+          pinToPap: ball.layout.pinToPap,
+          valAngle: ball.layout.valAngle,
+        }
+      : undefined,
+    colors: [ball.colors[0], ball.colors[1]],
+    hasPaint: ball.hasPaint === true ? true : undefined,
+  }
+}
+
+/**
  * 저장 페이로드를 검사·정리한다. 깨진 볼은 버리고, 하나도 안 남으면 null이다.
  * @param {unknown} raw - JSON.parse 결과
  * @returns {BallStorePayload | null} 정리된 페이로드
@@ -49,36 +87,12 @@ export function sanitizePayload(raw: unknown): BallStorePayload | null {
   const seen = new Set<string>()
   const balls: Ball[] = []
   for (const item of data.balls) {
-    if (!item || typeof item !== 'object') {
-      continue
-    }
-    const ball = item as Ball
-    if (typeof ball.id !== 'string' || ball.id.length === 0 || seen.has(ball.id)) {
-      continue
-    }
-    if (validateBall(ball).length > 0) {
+    const ball = sanitizeBall(item)
+    if (!ball || seen.has(ball.id)) {
       continue
     }
     seen.add(ball.id)
-    balls.push({
-      id: ball.id,
-      name: ball.name.trim(),
-      weightLb: ball.weightLb,
-      rg: ball.rg,
-      diff: ball.diff,
-      intDiff: ball.intDiff,
-      cover: ball.cover,
-      grit: ball.grit,
-      pinToCg: ball.pinToCg,
-      layout: ball.layout
-        ? {
-            drillAngle: ball.layout.drillAngle,
-            pinToPap: ball.layout.pinToPap,
-            valAngle: ball.layout.valAngle,
-          }
-        : undefined,
-      colors: [ball.colors[0], ball.colors[1]],
-    })
+    balls.push(ball)
   }
   if (balls.length === 0) {
     return null

@@ -22,7 +22,13 @@ import { pinProfile } from '@/domain/pins/profile'
 import { createPinSpots, isStrike } from '@/domain/pins/layout'
 import { ballMassKg } from '@/domain/physics/friction'
 import type { ShotResult } from '@/domain/types'
-import { applyBallLook, createBallMesh, DEFAULT_BALL_LOOK, type BallLook } from '@/scene/createBallMesh'
+import {
+  applyBallLook,
+  applyPaintTexture,
+  createBallMesh,
+  DEFAULT_BALL_LOOK,
+  type BallLook,
+} from '@/scene/createBallMesh'
 import { createPinMesh } from '@/scene/createPinMesh'
 import { physXToThree } from '@/scene/coords'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
@@ -93,6 +99,15 @@ export class PinDeckPhysics {
    */
   setBallLook(look: BallLook): void {
     applyBallLook(this.ballMesh, look)
+  }
+
+  /**
+   * 페인팅 텍스처를 볼에 입힌다.
+   * @param {HTMLCanvasElement | null} paint - 합성된 페인팅 캔버스
+   * @param {BallLook} look - 페인팅이 없을 때 쓸 외관
+   */
+  setPaintTexture(paint: HTMLCanvasElement | null, look: BallLook): void {
+    applyPaintTexture(this.ballMesh, paint, look)
   }
 
   /**

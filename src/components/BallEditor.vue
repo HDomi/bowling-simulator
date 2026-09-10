@@ -113,7 +113,9 @@ function save(): void {
   }
   const content = toBall()
   if (isNew.value) {
-    ballsStore.addBall(content)
+    if (!ballsStore.addBall(content)) {
+      return
+    }
   } else if (editingBall.value) {
     ballsStore.updateBall({ ...content, id: editingBall.value.id })
   }

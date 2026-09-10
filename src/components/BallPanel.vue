@@ -10,10 +10,12 @@ import {
   usbcWarnings,
 } from '@/domain/ball'
 import { EXAGGERATION, rgAxes, rgSpreadPercent } from '@/domain/ballGeometry'
+import { MAX_BALLS } from '@/domain/ballRepository'
 import { useBallsStore } from '@/stores/balls'
 
 const ballsStore = useBallsStore()
-const { balls, activeId, activeBall, simBall, compareBall, exaggeration } = storeToRefs(ballsStore)
+const { balls, activeId, activeBall, simBall, compareBall, exaggeration, canAddBall } =
+  storeToRefs(ballsStore)
 
 const selectedId = computed({
   get: () => activeId.value,
@@ -62,7 +64,9 @@ function handleRemove(): void {
     <div class="flex items-center justify-between">
       <h2 class="font-ui text-xs tracking-[0.2em] text-muted uppercase">마이볼</h2>
       <button
-        class="rounded-sm border border-sage/40 px-2 py-0.5 font-ui text-[11px] text-sage"
+        class="rounded-sm border border-sage/40 px-2 py-0.5 font-ui text-[11px] text-sage disabled:opacity-40"
+        :disabled="!canAddBall"
+        :title="canAddBall ? '' : `볼은 최대 ${MAX_BALLS}개까지`"
         @click="ballsStore.openEditor('new')"
       >
         + 새 볼
@@ -228,5 +232,12 @@ function handleRemove(): void {
         삭제
       </button>
     </div>
+
+    <button
+      class="w-full rounded-sm border border-sage/40 bg-sage/10 px-2 py-1.5 font-ui text-xs text-sage"
+      @click="ballsStore.openPaint(activeBall.id)"
+    >
+      색상 편집 ↗
+    </button>
   </section>
 </template>

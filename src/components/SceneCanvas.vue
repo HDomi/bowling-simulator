@@ -2,9 +2,12 @@
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { BowlingScene } from '@/scene/BowlingScene'
+import { mergePaintBlobs } from '@/domain/paintTexture'
+import { useBallsStore } from '@/stores/balls'
 import { useSimulatorStore } from '@/stores/simulator'
 
 const store = useSimulatorStore()
+const ballsStore = useBallsStore()
 const {
   ball, pattern, rollNonce, resetNonce, sweepNonce, sweepKeepIds, ballNumber,
   cameraPreset, result, preview, comparePreview, isRolling, candidateShots,
@@ -29,6 +32,7 @@ onMounted(async () => {
     instance.showPreview(preview.value)
     instance.showGhost(comparePreview.value)
     instance.showCandidates(candidateShots.value)
+    await syncPaint()
     observer = new ResizeObserver(handleResize)
     observer.observe(canvasRef.value)
     loading.value = false
@@ -68,6 +72,30 @@ watch(candidateShots, (shots) => {
   scene?.showCandidates(shots)
 }, { deep: false })
 
+/**
+ * 활성 볼의 페인팅을 불러 씬에 입힌다. 없으면 절차적 텍스처로 되돌린다.
+ */
+async function syncPaint(): Promise<void> {
+  const instance = scene
+  const target = ballsStore.activeBall
+  if (!instance) {
+    return
+  }
+  if (!target.hasPaint) {
+    instance.setPaintTexture(null)
+    return
+  }
+  const saved = await ballsStore.loadPaint(target.id)
+  if (!saved) {
+    instance.setPaintTexture(null)
+    return
+  }
+  const merged = await mergePaintBlobs(saved.fluid, saved.brush)
+  if (scene === instance) {
+    instance.setPaintTexture(merged)
+  }
+}
+
 /** 외관 필드만 묶은 키. 무게 슬라이더로 RG만 바뀔 때 텍스처를 다시 굽지 않는다. */
 const lookKey = computed(
   () => `${ball.value.colors[0]}|${ball.value.colors[1]}|${ball.value.cover}|${ball.value.grit}`,
@@ -76,6 +104,23 @@ const lookKey = computed(
 watch(lookKey, () => {
   scene?.setBallLook(ball.value)
 })
+
+watch(
+  () => `${ballsStore.activeBall.id}|${ballsStore.activeBall.hasPaint ? '1' : '0'}`,
+  () => {
+    void syncPaint()
+  },
+)
+
+// 페인팅 에디터를 닫는 순간 갱신된 텍스처를 다시 읽는다.
+watch(
+  () => ballsStore.paintingId,
+  (next, previous) => {
+    if (!next && previous) {
+      void syncPaint()
+    }
+  },
+)
 
 watch(cameraPreset, (next) => {
   scene?.applyCameraPreset(next)

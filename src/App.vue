@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BallEditor from '@/components/BallEditor.vue'
+import PaintEditor from '@/components/PaintEditor.vue'
 import BallPanel from '@/components/BallPanel.vue'
 import PatternPanel from '@/components/PatternPanel.vue'
 import BottomBar from '@/components/BottomBar.vue'
@@ -21,7 +22,7 @@ import type { CameraPreset } from '@/scene/BowlingScene'
 const introActive = ref(true)
 const store = useSimulatorStore()
 const ballsStore = useBallsStore()
-const { sheetOpen, editingId, hasBalls } = storeToRefs(ballsStore)
+const { sheetOpen, editingId, hasBalls, ready } = storeToRefs(ballsStore)
 
 /**
  * 폼 입력 중인지 본다. 이때는 단축키를 먹지 않는다.
@@ -43,7 +44,7 @@ function isTyping(target: EventTarget | null): boolean {
  * @param {KeyboardEvent} event - 키 이벤트
  */
 function handleKey(event: KeyboardEvent): void {
-  if (introActive.value || !hasBalls.value) return
+  if (introActive.value || !ready.value || !hasBalls.value) return
   if (event.key === 'Escape') {
     if (editingId.value !== null) {
       ballsStore.closeEditor()
@@ -98,7 +99,11 @@ onUnmounted(() => {
   <div class="app-root">
   <IntroSplash @done="finishIntro" />
   <div class="app-content" :inert="introActive">
-  <Transition name="page" mode="out-in" @after-enter="focusPage">
+  <!-- 저장소 로드 전에는 아무것도 그리지 않는다. 볼 등록 화면이 깜빡 스친다. -->
+  <div v-if="!ready" class="grid h-full place-items-center font-ui text-xs text-muted">
+    불러오는 중…
+  </div>
+  <Transition v-else name="page" mode="out-in" @after-enter="focusPage">
   <BallSetup v-if="!hasBalls" key="setup" />
   <div v-else key="lane" class="simulator-workspace flex h-full min-h-0 flex-col bg-paper text-ink">
     <TopBar />
@@ -145,6 +150,7 @@ onUnmounted(() => {
     </div>
     <BottomBar />
     <BallEditor />
+    <PaintEditor />
   </div>
   </Transition>
   </div>

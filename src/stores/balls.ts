@@ -2,18 +2,33 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { BALL_LIMITS, createBall, createBallId, EXAMPLE_BALL, effectiveBall } from '@/domain/ball'
 import { EXAGGERATION } from '@/domain/ballGeometry'
-import { browserStorage, loadBalls, saveBalls } from '@/domain/ballStorage'
+import {
+  deletePaint,
+  loadBalls,
+  loadPaint,
+  MAX_BALLS,
+  requestPersistence,
+  saveBalls,
+  savePaint,
+  type BallPaint,
+} from '@/domain/ballRepository'
 import type { Ball } from '@/domain/types'
 
 /**
- * 마이볼 목록. localStorage에 저장하고, 활성 볼과 비교용 이전 볼을 기억한다.
+ * 마이볼 목록. IndexedDB에 저장하고, 활성 볼과 비교용 이전 볼을 기억한다.
+ *
+ * IndexedDB는 비동기라 초기값이 비어 있다. `ready`가 true가 되기 전에는
+ * 화면을 그리지 않아야 볼 등록 화면이 깜빡 스치지 않는다.
  */
 export const useBallsStore = defineStore('balls', () => {
-  const storage = browserStorage()
-  const loaded = loadBalls(storage)
-
-  const balls = ref<Ball[]>(loaded.balls)
-  const activeId = ref(loaded.activeId)
+  const balls = ref<Ball[]>([])
+  const activeId = ref('')
+  /** 저장소에서 첫 로드가 끝났는지. */
+  const ready = ref(false)
+  /** 저장소가 영구 등급인지. 아니면 브라우저가 비울 수 있다. */
+  const persisted = ref(false)
+  /** 로드가 끝나기 전에는 저장하지 않는다. 빈 목록으로 덮어쓰면 안 된다. */
+  let hydrated = false
   /** 직전에 쓰던 볼. 궤적 비교(고스트)에 쓴다. */
   const compareId = ref<string | null>(null)
   /** 관성 타원체 과장 지수. 저장하지 않는다. */
@@ -22,6 +37,8 @@ export const useBallsStore = defineStore('balls', () => {
   const sheetOpen = ref(false)
   /** 편집 중인 볼 id. 'new'면 새 볼, null이면 닫힘. */
   const editingId = ref<string | 'new' | null>(null)
+  /** 페인팅 에디터를 연 볼 id. null이면 닫힘. */
+  const paintingId = ref<string | null>(null)
 
   const activeBall = computed(
     () => balls.value.find((ball) => ball.id === activeId.value) ?? balls.value[0] ?? EXAMPLE_BALL,
@@ -44,17 +61,82 @@ export const useBallsStore = defineStore('balls', () => {
       : null,
   )
 
+  void (async () => {
+    const loaded = await loadBalls()
+    balls.value = loaded.balls
+    activeId.value = loaded.activeId
+    hydrated = true
+    ready.value = true
+    persisted.value = await requestPersistence()
+  })()
+
   watch(
     [balls, activeId],
     () => {
-      saveBalls(storage, {
-        version: loaded.version,
-        activeId: activeId.value,
-        balls: balls.value,
-      })
+      if (!hydrated) {
+        return
+      }
+      void saveBalls(balls.value, activeId.value)
     },
     { deep: true },
   )
+
+  /** 볼을 더 만들 수 있는지. */
+  const canAddBall = computed(() => balls.value.length < MAX_BALLS)
+
+  const paintingBall = computed(() =>
+    paintingId.value ? (balls.value.find((ball) => ball.id === paintingId.value) ?? null) : null,
+  )
+
+  /**
+   * 페인팅 에디터를 연다.
+   * @param {string} id - 볼 id
+   */
+  function openPaint(id: string): void {
+    if (balls.value.some((ball) => ball.id === id)) {
+      paintingId.value = id
+    }
+  }
+
+  /**
+   * 페인팅 에디터를 닫는다.
+   */
+  function closePaint(): void {
+    paintingId.value = null
+  }
+
+  /**
+   * 페인팅을 저장하고 그 볼을 활성으로 만든다.
+   * @param {BallPaint} paint - 페인팅
+   * @returns {Promise<boolean>} 성공 여부
+   */
+  async function storePaint(paint: BallPaint): Promise<boolean> {
+    const ok = await savePaint(paint)
+    if (!ok) {
+      return false
+    }
+    const target = balls.value.find((ball) => ball.id === paint.ballId)
+    if (target && !target.hasPaint) {
+      // hasPaint가 바뀌면 watch가 볼 목록을 다시 저장한다.
+      updateBall({ ...target, hasPaint: true })
+    }
+    if (activeId.value !== paint.ballId) {
+      selectBall(paint.ballId)
+    }
+    return true
+  }
+
+  /**
+   * 페인팅을 지운다. 볼은 다시 절차적 텍스처로 돌아간다.
+   * @param {string} ballId - 볼 id
+   */
+  async function removePaint(ballId: string): Promise<void> {
+    await deletePaint(ballId)
+    const target = balls.value.find((ball) => ball.id === ballId)
+    if (target?.hasPaint) {
+      updateBall({ ...target, hasPaint: undefined })
+    }
+  }
 
   /**
    * 활성 볼을 바꾼다. 직전 볼은 비교 대상으로 남긴다.
@@ -80,7 +162,10 @@ export const useBallsStore = defineStore('balls', () => {
    * @param {Omit<Ball, 'id'>} draft - 볼 내용
    * @returns {Ball} 저장된 볼
    */
-  function addBall(draft: Omit<Ball, 'id'>): Ball {
+  function addBall(draft: Omit<Ball, 'id'>): Ball | null {
+    if (balls.value.length >= MAX_BALLS) {
+      return null
+    }
     const ball = createBall(draft)
     balls.value = [...balls.value, ball]
     selectBall(ball.id)
@@ -174,8 +259,13 @@ export const useBallsStore = defineStore('balls', () => {
     activeId,
     compareId,
     exaggeration,
+    ready,
+    persisted,
+    canAddBall,
     sheetOpen,
     editingId,
+    paintingId,
+    paintingBall,
     activeBall,
     compareBall,
     simBall,
@@ -191,6 +281,11 @@ export const useBallsStore = defineStore('balls', () => {
     setExaggeration,
     openEditor,
     closeEditor,
+    openPaint,
+    closePaint,
+    storePaint,
+    removePaint,
+    loadPaint,
     toggleSheet,
   }
 })

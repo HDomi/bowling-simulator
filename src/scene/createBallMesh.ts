@@ -6,8 +6,8 @@ import {
   Color,
   Mesh,
   MeshPhysicalMaterial,
-  SphereGeometry,
   SRGBColorSpace,
+  SphereGeometry,
 } from 'three'
 
 /** 볼 색이 주어지지 않았을 때 쓰는 루비/스모크 조합. */
@@ -409,4 +409,32 @@ export function applyBallLook(mesh: Mesh, look: BallLook): void {
   if (previous instanceof MeshPhysicalMaterial) {
     disposeBallMaterial(previous)
   }
+}
+
+/**
+ * 페인팅 텍스처를 볼 메시에 입힌다. null이면 절차적 텍스처로 되돌린다.
+ *
+ * 페인팅은 표면 색을 그대로 보여줘야 하므로 emissive 틴트를 끈다.
+ *
+ * @param {Mesh} mesh - 볼 메시
+ * @param {HTMLCanvasElement | null} paint - 합성된 페인팅 캔버스
+ * @param {BallLook} look - 페인팅이 없을 때 쓸 외관
+ */
+export function applyPaintTexture(
+  mesh: Mesh,
+  paint: HTMLCanvasElement | null,
+  look: BallLook,
+): void {
+  if (!paint) {
+    applyBallLook(mesh, look)
+    return
+  }
+  const material = mesh.material as MeshPhysicalMaterial
+  material.map?.dispose()
+  const texture = new CanvasTexture(paint)
+  texture.colorSpace = SRGBColorSpace
+  material.map = texture
+  material.color.set('#ffffff')
+  material.emissiveIntensity = 0
+  material.needsUpdate = true
 }

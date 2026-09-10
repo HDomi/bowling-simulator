@@ -19,16 +19,16 @@ function paintOil(image: ImageData, pattern: Pattern): void {
     for (let x = 0; x < cols; x += 1) {
       const oil = pattern.grid[y]?.[x] ?? 0
       const i = (y * cols + x) * 4
-      image.data[i] = 255
-      image.data[i + 1] = 176
-      image.data[i + 2] = 32
+      image.data[i] = 90
+      image.data[i + 1] = 116
+      image.data[i + 2] = 97
       image.data[i + 3] = Math.round(oil * 70)
     }
   }
 }
 
 /**
- * 오일 패턴을 레인 위 반투명 앰버 텍스처로 만든다.
+ * 오일 패턴을 레인 위 반투명 세이지색 텍스처로 만든다.
  * @param {Pattern} pattern - 오일 패턴
  * @returns {Mesh} 오일 오버레이
  */

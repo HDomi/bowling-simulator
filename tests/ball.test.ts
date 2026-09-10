@@ -272,11 +272,10 @@ describe('표면 마커', () => {
 })
 
 describe('localStorage 저장', () => {
-  it('저장소가 없으면 예시 볼 하나로 시작한다', () => {
+  it('저장소가 없으면 첫 볼 설정을 위한 빈 목록으로 시작한다', () => {
     const loaded = loadBalls(null)
-    expect(loaded.balls).toHaveLength(1)
-    expect(loaded.balls[0].id).toBe(EXAMPLE_BALL.id)
-    expect(loaded.activeId).toBe(EXAMPLE_BALL.id)
+    expect(loaded.balls).toEqual([])
+    expect(loaded.activeId).toBe('')
   })
 
   it('저장 후 다시 읽으면 같다', () => {
@@ -290,14 +289,14 @@ describe('localStorage 저장', () => {
     expect(loaded.balls).toEqual(payload.balls)
   })
 
-  it('깨진 JSON·다른 버전·빈 목록은 예시 볼로 떨어진다', () => {
+  it('깨진 JSON·다른 버전·빈 목록은 첫 볼 설정으로 돌아간다', () => {
     const storage = memoryStorage()
     storage.setItem(BALL_STORAGE_KEY, '{not json')
-    expect(loadBalls(storage).balls[0].id).toBe(EXAMPLE_BALL.id)
+    expect(loadBalls(storage).balls).toEqual([])
     storage.setItem(BALL_STORAGE_KEY, JSON.stringify({ version: 99, activeId: 'x', balls: [EXAMPLE_BALL] }))
-    expect(loadBalls(storage).balls[0].id).toBe(EXAMPLE_BALL.id)
+    expect(loadBalls(storage).balls).toEqual([])
     storage.setItem(BALL_STORAGE_KEY, JSON.stringify({ version: BALL_STORAGE_VERSION, activeId: 'x', balls: [] }))
-    expect(loadBalls(storage).balls[0].id).toBe(EXAMPLE_BALL.id)
+    expect(loadBalls(storage).balls).toEqual([])
   })
 
   it('잘못된 볼과 중복 id는 버리고 activeId를 고친다', () => {

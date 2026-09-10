@@ -1,4 +1,4 @@
-import { EXAMPLE_BALL, validateBall } from '@/domain/ball'
+import { validateBall } from '@/domain/ball'
 import type { Ball } from '@/domain/types'
 
 export const BALL_STORAGE_KEY = 'bowling-sim.balls'
@@ -89,15 +89,15 @@ export function sanitizePayload(raw: unknown): BallStorePayload | null {
 }
 
 /**
- * 저장소에서 볼 목록을 읽는다. 없거나 깨졌으면 예시 볼 하나로 시작한다.
+ * 저장소에서 볼 목록을 읽는다. 없거나 깨졌으면 빈 목록으로 첫 볼 설정을 시작한다.
  * @param {KeyValueStorage | null} storage - 저장소
  * @returns {BallStorePayload} 페이로드
  */
 export function loadBalls(storage: KeyValueStorage | null): BallStorePayload {
   const fallback: BallStorePayload = {
     version: BALL_STORAGE_VERSION,
-    activeId: EXAMPLE_BALL.id,
-    balls: [{ ...EXAMPLE_BALL, colors: [...EXAMPLE_BALL.colors] }],
+    activeId: '',
+    balls: [],
   }
   if (!storage) {
     return fallback

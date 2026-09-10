@@ -24,8 +24,9 @@ export const useBallsStore = defineStore('balls', () => {
   const editingId = ref<string | 'new' | null>(null)
 
   const activeBall = computed(
-    () => balls.value.find((ball) => ball.id === activeId.value) ?? balls.value[0],
+    () => balls.value.find((ball) => ball.id === activeId.value) ?? balls.value[0] ?? EXAMPLE_BALL,
   )
+  const hasBalls = computed(() => balls.value.length > 0)
   const compareBall = computed(() => {
     if (!compareId.value || compareId.value === activeId.value) {
       return null
@@ -109,20 +110,17 @@ export const useBallsStore = defineStore('balls', () => {
   }
 
   /**
-   * 볼을 지운다. 마지막 볼을 지우면 예시 볼로 되돌린다.
+   * 볼을 지운다. 마지막 볼을 지우면 첫 볼 설정으로 돌아간다.
    * @param {string} id - 볼 id
    */
   function removeBall(id: string): void {
     const remaining = balls.value.filter((ball) => ball.id !== id)
-    if (remaining.length === 0) {
-      remaining.push({ ...EXAMPLE_BALL, colors: [...EXAMPLE_BALL.colors] })
-    }
     balls.value = remaining
     if (compareId.value === id) {
       compareId.value = null
     }
     if (activeId.value === id) {
-      activeId.value = remaining[0].id
+      activeId.value = remaining[0]?.id ?? ''
     }
   }
 
@@ -172,6 +170,7 @@ export const useBallsStore = defineStore('balls', () => {
 
   return {
     balls,
+    hasBalls,
     activeId,
     compareId,
     exaggeration,

@@ -6,11 +6,11 @@ import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 
-const SKID = new Color('#4a8a99')
-const HOOK = new Color('#1fe0ff')
-const BACKEND = new Color('#ff2fa8')
+const SKID = new Color('#7b8a7d')
+const HOOK = new Color('#b1743f')
+const BACKEND = new Color('#a64b35')
 /** 비교용 고스트 궤적. 구간 색 없이 흐린 크림색 점선이다. */
-const GHOST = new Color('#b9b3a6')
+const GHOST = new Color('#6c7265')
 
 export type TrailOptions = {
   /** true면 직전 볼의 비교 궤적으로 그린다. */
@@ -18,7 +18,7 @@ export type TrailOptions = {
 }
 
 /**
- * 구간별 색이 들어가는 네온 궤적 라인을 만든다.
+ * 구간별 색이 들어가는 잉크색 궤적 라인을 만든다.
  * @param {ShotResult} result - 샷 결과
  * @param {number} width - 화면 너비
  * @param {number} height - 화면 높이

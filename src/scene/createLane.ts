@@ -27,9 +27,9 @@ import {
   ShapeGeometry,
 } from 'three'
 
-const LANE_HI = 0x6b4a2a
-const GUTTER_COLOR = 0x101318
-const CREAM = 0xe8e4dc
+const LANE_HI = 0xd9c59e
+const GUTTER_COLOR = 0xb4b59d
+const CREAM = 0x555e4c
 
 /**
  * 39보드 우드 스트라이프 텍스처를 만든다.
@@ -45,13 +45,22 @@ function createBoardTexture(): CanvasTexture {
   }
 
   for (let board = 0; board < BOARD_COUNT; board += 1) {
-    const shade = board % 2 === 0 ? '#6b4a2a' : '#4a3218'
+    const shade = board % 2 === 0 ? '#dfcda7' : '#e9d9b8'
     ctx.fillStyle = shade
     ctx.fillRect(board * 8, 0, 8, 512)
-    ctx.fillStyle = 'rgba(210, 160, 90, 0.28)'
+    ctx.fillStyle = 'rgba(78, 79, 56, 0.18)'
     ctx.fillRect(board * 8 + 7, 0, 1, 512)
   }
 
+  // 가는 보드선 위에 도면 해칭과 낮은 대비의 기하학 무늬를 찍는다.
+  ctx.strokeStyle = 'rgba(94, 88, 65, 0.12)'
+  ctx.lineWidth = 0.6
+  for (let y = 0; y < 512; y += 64) {
+    for (let x = 0; x < 312; x += 48) {
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 24, y + 32); ctx.lineTo(x + 48, y); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(x, y + 40); ctx.lineTo(x + 48, y + 40); ctx.stroke()
+    }
+  }
   const texture = new CanvasTexture(canvas)
   texture.wrapS = RepeatWrapping
   texture.wrapT = RepeatWrapping
@@ -103,7 +112,7 @@ function createSideLabel(text: string, x: number): Mesh {
   if (!ctx) {
     throw new Error('2d context unavailable')
   }
-  ctx.fillStyle = '#e8e4dc'
+  ctx.fillStyle = '#53594a'
   ctx.font = '700 44px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -126,8 +135,8 @@ export function createLane(): Group {
   const boardMap = createBoardTexture()
   const laneMat = new MeshStandardMaterial({
     map: boardMap,
-    color: 0x8a6240,
-    roughness: 0.42,
+    color: 0xffffff,
+    roughness: 0.8,
     metalness: 0.04,
   })
 
@@ -139,7 +148,7 @@ export function createLane(): Group {
 
   const approach = new Mesh(
     new PlaneGeometry(LANE_WIDTH, APPROACH_LENGTH),
-    new MeshStandardMaterial({ color: 0x5a3d24, roughness: 0.65 }),
+    new MeshStandardMaterial({ color: 0xddceb0, roughness: 0.65 }),
   )
   approach.rotation.x = -Math.PI / 2
   approach.position.set(0, 0, -APPROACH_LENGTH / 2)

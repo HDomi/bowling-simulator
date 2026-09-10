@@ -38,6 +38,23 @@ export const PIN_MASS = 3.5 * LB
 /** 곡면 충돌체의 최대 반지름. 인계 시 겹침 방지에 사용한다. */
 export const PIN_COLLIDER_RADIUS = PIN_MAX_RADIUS
 export const PIN_SPACING = 12 * IN
+
+/* ── 핀덱 주변 구조물 ──────────────────────────────────────────
+ * 실제 볼링장은 핀덱 끝에서 바닥이 꺼져 피트(구덩이)가 되고, 양옆의 킥백 벽이
+ * 핀을 안쪽으로 되튕긴다. 이 구조가 없으면 핀과 공이 레인 밖으로 날아가
+ * 핀세터가 치울 수 없는 자리에 남는다.
+ */
+
+/** 핀덱이 끝나고 피트가 시작되는 다운레인 위치. 1번 핀에서 34.2인치 뒤다. */
+export const PIN_DECK_END = LANE_LENGTH + 34.2 * IN
+/** 피트 뒤끝(백스톱 안쪽면). */
+export const PIT_END = PIN_DECK_END + 1.05
+/** 핀덱 바닥에서 피트 바닥까지 깊이. */
+export const PIT_DEPTH = 0.45
+/** 킥백 벽 안쪽면의 좌우 위치. 거터 바깥 가장자리에 선다. */
+export const KICKBACK_X = LANE_WIDTH / 2 + GUTTER_WIDTH
+/** 킥백·백스톱 높이. */
+export const KICKBACK_HEIGHT = 0.62
 export const PIN_ROW_SPACING = PIN_SPACING * Math.cos(Math.PI / 6)
 
 export const DEFAULT_BALL_WEIGHT_LB = 15
@@ -152,33 +169,13 @@ export const PHYSICS = {
   maxTime: 4,
 }
 
-/**
- * 락볼링장 조명. 밝기를 여기서 한 번에 조절한다.
- *
- * 어두운 방에 레인 머리와 핀덱만 스포트라이트로 떨어뜨리는 구성이다.
- * 개발 중 화면이 안 보이면 ambient만 잠깐 올리고 되돌린다.
- */
+/** 아이보리 스튜디오와 볼 뷰어의 공통 색상·노출. */
 export const LIGHTING = {
-  ambient: 0.2,
-  ambientColor: '#5c6a7a',
-  spotColor: '#ffe8c8',
-  headIntensity: 70,
-  headDistance: 16,
-  /** 레인 중간. 어둡게 두되 궤적이 지나는 바닥 형태는 남긴다. */
-  midIntensity: 38,
-  midDistance: 18,
-  deckIntensity: 95,
-  deckDistance: 14,
-  neonCyan: '#1fe0ff',
-  neonMagenta: '#ff2fa8',
-  neonIntensity: 11,
-  /** 네온이 번지는 정도. 0이면 블룸이 꺼진다. */
-  bloomStrength: 0.85,
-  bloomRadius: 0.45,
-  bloomThreshold: 0.72,
-  /** 씬 환경광 세기. 어두운 방이라 낮게 둔다. */
-  environmentIntensity: 0.11,
-  toneMappingExposure: 1.08,
+  ambientColor: '#fff8e9',
+  neonCyan: '#526c63',
+  neonMagenta: '#a64b35',
+  environmentIntensity: 0.6,
+  toneMappingExposure: 0.95,
 } as const
 
 /** 구간 검출. USBC와 같은 R² 0.99 선형 분할을 쓴다. */
@@ -211,6 +208,42 @@ export const PIN_PHYSICS = {
   maxSubSteps: 12,
   /** 한 프레임에 몰아서 처리할 최대 시간. 탭 복귀 직후 폭주를 막는다. */
   maxFrameS: 0.1,
+} as const
+
+/**
+ * 핀세터(스위프) 동작 타임라인. 값은 초이며 누적 시점이다.
+ *
+ * 실제 볼링장 순서를 따른다 — 남은 핀을 들어올리고, 스위프바가 쓰러진 핀을
+ * 피트로 밀어낸 뒤, 남은 핀을 제자리에 다시 내려놓는다.
+ */
+export const PINSETTER = {
+  /** 남은 핀을 들어올리는 데 걸리는 시간과 높이. */
+  liftEnd: 0.5,
+  liftHeight: 0.42,
+  /** 스위프바가 내려오는 구간. */
+  dropStart: 0.35,
+  dropEnd: 0.75,
+  /** 쓸어내는 구간. */
+  sweepStart: 0.75,
+  sweepEnd: 1.6,
+  /** 스위프바가 올라가는 구간. */
+  raiseStart: 1.6,
+  raiseEnd: 2.0,
+  /** 남은 핀을 내려놓는 구간. */
+  placeStart: 2.0,
+  placeEnd: 2.45,
+  /** 스위프바가 대기 위치로 돌아오는 구간. */
+  returnStart: 2.45,
+  returnEnd: 2.95,
+  /** 대기 높이와 내려온 높이. */
+  restY: 0.78,
+  downY: 0.035,
+  /** 대기 z(핀덱 앞)와 쓸어낸 끝 z. */
+  restZ: LANE_LENGTH - 0.28,
+  sweptZ: PIN_DECK_END + 0.12,
+  /** 스위프바 크기. */
+  barHeight: 0.2,
+  barThickness: 0.05,
 } as const
 
 export const PIN_DOWN_TILT_DEG = 30

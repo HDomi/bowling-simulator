@@ -45,9 +45,9 @@ const HOLE_DEPTH = 0.22
 
 const COLOR_PIN = new Color(LIGHTING.neonCyan)
 const COLOR_MB = new Color(LIGHTING.neonMagenta)
-const COLOR_INTERMEDIATE = new Color('#ffb020')
-const COLOR_CG = new Color('#ffb020')
-const COLOR_PAP = new Color('#e8e4dc')
+const COLOR_INTERMEDIATE = new Color('#9b7438')
+const COLOR_CG = new Color('#9b7438')
+const COLOR_PAP = new Color('#30352d')
 
 const UP = new Vector3(0, 1, 0)
 
@@ -111,7 +111,7 @@ export class BallViewer {
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.enablePan = false
     this.controls.enableDamping = true
-    this.controls.autoRotate = true
+    this.controls.autoRotate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     this.controls.autoRotateSpeed = 1.1
     this.controls.minDistance = 2.2
     this.controls.maxDistance = 6
@@ -122,7 +122,7 @@ export class BallViewer {
       new MeshStandardMaterial({
         color: new Color(LIGHTING.neonCyan).multiplyScalar(0.35),
         emissive: new Color(LIGHTING.neonCyan),
-        emissiveIntensity: 0.55,
+        emissiveIntensity: 0.08,
         roughness: 0.6,
         metalness: 0,
         // 환경광을 죽여야 회백색으로 뜨지 않고 시안이 남는다.
@@ -137,10 +137,10 @@ export class BallViewer {
       new MeshStandardMaterial({
         color: new Color(LIGHTING.neonCyan),
         emissive: new Color(LIGHTING.neonCyan),
-        emissiveIntensity: 0.6,
+        emissiveIntensity: 0.05,
         wireframe: true,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.5,
       }),
     )
     this.coreWire.renderOrder = 1

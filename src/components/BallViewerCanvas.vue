@@ -54,6 +54,6 @@ watch(lookKey, () => {
 <template>
   <canvas
     ref="canvasRef"
-    class="aspect-square w-full rounded-sm bg-black/40"
+    class="aspect-square w-full rounded-sm bg-paper-dark"
   />
 </template>

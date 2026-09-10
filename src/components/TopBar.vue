@@ -5,32 +5,44 @@ import { useSimulatorStore } from '@/stores/simulator'
 
 const store = useSimulatorStore()
 const ballsStore = useBallsStore()
-const { isRolling } = storeToRefs(store)
+const { canRelease, frameActive, frameDone, ballNumber, pinsetterRunning, isRolling } =
+  storeToRefs(store)
 const { activeBall, sheetOpen } = storeToRefs(ballsStore)
 </script>
 
 <template>
-  <header class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+  <header class="flex flex-wrap items-center justify-between gap-3 border-b border-ink/15 px-4 py-3">
     <div class="flex items-end gap-3">
-      <h1 class="font-logo text-2xl tracking-wide text-neon-cy drop-shadow-[0_0_12px_#1fe0ff]">
+      <h1 tabindex="-1" class="font-logo text-xl tracking-tight text-ink">
         BOWLING
       </h1>
-      <span class="mb-1 font-ui text-xs text-dim">SIMULATOR</span>
+      <span class="mb-1 font-ui text-xs text-muted">SIMULATOR</span>
     </div>
     <div class="flex items-center gap-2">
       <button
-        class="max-w-[9rem] truncate rounded-sm border border-white/15 px-3 py-2 font-ui text-xs lg:hidden"
-        :class="sheetOpen ? 'bg-neon-cy/20 text-neon-cy' : 'text-cream'"
+        class="max-w-[9rem] truncate rounded-sm border border-ink/20 px-3 py-2 font-ui text-xs lg:hidden"
+        :class="sheetOpen ? 'bg-sage/20 text-sage' : 'text-ink'"
         @click="ballsStore.toggleSheet()"
       >
-        🎳 {{ activeBall.name }}
+        {{ activeBall.name }}
+      </button>
+      <span
+        v-if="frameActive"
+        class="font-mono text-xs text-muted"
+      >{{ pinsetterRunning ? '핀 정리 중' : frameDone ? '프레임 종료' : `${ballNumber}구` }}</span>
+      <button
+        class="rounded-sm border border-ink/20 px-4 py-2 font-ui text-sm font-semibold text-ink disabled:opacity-40"
+        :disabled="isRolling || pinsetterRunning"
+        @click="store.startFrame()"
+      >
+        프레임 시작
       </button>
       <button
-        class="rounded-sm border border-neon-cy/40 bg-neon-cy/10 px-4 py-2 font-ui text-sm font-semibold text-neon-cy disabled:opacity-40"
-        :disabled="isRolling"
-        @click="store.roll()"
+        class="rounded-sm border border-sage/40 bg-sage/10 px-4 py-2 font-ui text-sm font-semibold text-sage disabled:opacity-40"
+        :disabled="!canRelease"
+        @click="store.releaseBall()"
       >
-        굴리기 · Space
+        릴리즈 ↗
       </button>
     </div>
   </header>

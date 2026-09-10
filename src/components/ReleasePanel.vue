@@ -60,25 +60,25 @@ function handleTargetSlider(event: Event): void {
 </script>
 
 <template>
-  <section class="space-y-4 border-white/10 bg-black/30 p-4">
-    <h2 class="font-ui text-xs tracking-[0.2em] text-dim uppercase">릴리즈</h2>
+  <section class="space-y-4 border-ink/15 bg-paper-dark/50 p-4">
+    <h2 class="font-ui text-xs tracking-[0.2em] text-muted uppercase">릴리즈</h2>
     <div class="flex gap-1">
       <button
         class="flex-1 rounded-sm px-2 py-1.5 font-ui text-xs"
-        :class="hand === 'right' ? 'bg-neon-cy/20 text-neon-cy' : 'text-dim'"
+        :class="hand === 'right' ? 'bg-sage/20 text-sage' : 'text-muted'"
         @click="store.setHand('right')"
       >
         오른손
       </button>
       <button
         class="flex-1 rounded-sm px-2 py-1.5 font-ui text-xs"
-        :class="hand === 'left' ? 'bg-neon-cy/20 text-neon-cy' : 'text-dim'"
+        :class="hand === 'left' ? 'bg-sage/20 text-sage' : 'text-muted'"
         @click="store.setHand('left')"
       >
         왼손
       </button>
     </div>
-    <p class="font-ui text-[11px] leading-relaxed text-dim">
+    <p class="font-ui text-[11px] leading-relaxed text-muted">
       {{ handLabel(hand) }}:
       {{
         hand === 'right'
@@ -90,7 +90,7 @@ function handleTargetSlider(event: Event): void {
       <span class="font-ui text-sm">구질</span>
       <select
         v-model="selectedStyleId"
-        class="w-full rounded-sm border border-white/15 bg-void px-2 py-1 font-ui text-sm text-cream"
+        class="w-full rounded-sm border border-ink/20 bg-paper px-2 py-1 font-ui text-sm text-ink"
       >
         <option
           v-if="styleId === CUSTOM_STYLE_ID"
@@ -109,11 +109,11 @@ function handleTargetSlider(event: Event): void {
     </label>
     <p
       v-if="styleNote"
-      class="font-ui text-[11px] leading-relaxed text-dim"
+      class="font-ui text-[11px] leading-relaxed text-muted"
     >
       {{ styleNote }}
     </p>
-    <p class="font-mono text-[11px] text-dim">
+    <p class="font-mono text-[11px] text-muted">
       축 회전 {{ axisRotation }}° · 축 기울기 {{ axisTilt }}°
     </p>
     <div class="flex items-center justify-between">
@@ -123,7 +123,7 @@ function handleTargetSlider(event: Event): void {
           v-for="unit in units"
           :key="unit.id"
           class="rounded-sm px-2 py-0.5 font-ui text-xs"
-          :class="speedUnit === unit.id ? 'bg-neon-cy/20 text-neon-cy' : 'text-dim'"
+          :class="speedUnit === unit.id ? 'bg-sage/20 text-sage' : 'text-muted'"
           @click="store.setSpeedUnit(unit.id)"
         >
           {{ unit.label }}
@@ -133,7 +133,7 @@ function handleTargetSlider(event: Event): void {
     <label class="block space-y-1">
       <div class="flex justify-between font-ui text-sm">
         <span>속도</span>
-        <span class="font-mono text-neon-cy">{{ formatSpeed(speedMph, speedUnit) }}</span>
+        <span class="font-mono text-sage">{{ formatSpeed(speedMph, speedUnit) }}</span>
       </div>
       <input
         v-model.number="speedMph"
@@ -147,7 +147,7 @@ function handleTargetSlider(event: Event): void {
     <label class="block space-y-1">
       <div class="flex justify-between font-ui text-sm">
         <span>훅</span>
-        <span class="font-mono text-neon-cy">{{ revRate }} rpm</span>
+        <span class="font-mono text-sage">{{ revRate }} rpm</span>
       </div>
       <input
         v-model.number="revRate"
@@ -161,7 +161,7 @@ function handleTargetSlider(event: Event): void {
     <label class="block space-y-1">
       <div class="flex justify-between font-ui text-sm">
         <span>릴리즈 보드</span>
-        <span class="font-mono text-neon-cy">{{ releaseBoard }}</span>
+        <span class="font-mono text-sage">{{ releaseBoard }}</span>
       </div>
       <input
         class="w-full"
@@ -176,7 +176,7 @@ function handleTargetSlider(event: Event): void {
     <label class="block space-y-1">
       <div class="flex justify-between font-ui text-sm">
         <span>타겟 보드</span>
-        <span class="font-mono text-neon-cy">{{ targetBoard }}</span>
+        <span class="font-mono text-sage">{{ targetBoard }}</span>
       </div>
       <input
         class="w-full"
@@ -188,18 +188,18 @@ function handleTargetSlider(event: Event): void {
         @input="handleTargetSlider"
       >
     </label>
-    <p class="font-ui text-[11px] leading-relaxed text-dim">
+    <p class="font-ui text-[11px] leading-relaxed text-muted">
       슬라이더 왼쪽 = 레인 왼쪽(보드 39) · 오른쪽 = 레인 오른쪽(보드 1)
     </p>
     <p
       v-if="hand === 'right' && targetBoard >= releaseBoard"
-      class="font-ui text-[11px] leading-relaxed text-amber"
+      class="font-ui text-[11px] leading-relaxed text-ochre"
     >
       타겟이 릴리즈보다 왼쪽입니다. 오른손은 더 오른쪽(낮은 보드)을 봐야 밖으로 나갔다가 훅합니다.
     </p>
     <p
       v-else-if="hand === 'left' && targetBoard <= releaseBoard"
-      class="font-ui text-[11px] leading-relaxed text-amber"
+      class="font-ui text-[11px] leading-relaxed text-ochre"
     >
       타겟이 릴리즈보다 오른쪽입니다. 왼손은 더 왼쪽(높은 보드)을 봐야 밖으로 나갔다가 훅합니다.
     </p>

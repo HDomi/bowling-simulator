@@ -10,6 +10,7 @@ import {
 import type { PathSample, Pattern, ShotResult } from '@/domain/types'
 import { physXToThree, sampleToBallPos } from '@/scene/coords'
 import { CEILING_GROUP_NAME, createAlley } from '@/scene/createAlley'
+import { createPinDeck, SWEEP_BAR_NAME } from '@/scene/createPinDeck'
 import { applyBallLook, createBallMesh, DEFAULT_BALL_LOOK, type BallLook } from '@/scene/createBallMesh'
 import { createLane } from '@/scene/createLane'
 import { createLights } from '@/scene/createLights'
@@ -27,18 +28,14 @@ import {
   Quaternion,
   SRGBColorSpace,
   Scene,
-  Vector2,
   Vector3,
   WebGLRenderer,
+  PCFSoftShadowMap,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { Line2 } from 'three/addons/lines/Line2.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 
 export type CameraPreset = 1 | 2 | 3 | 4
 
@@ -56,7 +53,6 @@ export class BowlingScene {
   private renderer: WebGLRenderer
   private scene = new Scene()
   private camera: PerspectiveCamera
-  private composer: EffectComposer
   private controls: OrbitControls
   private clock = new Clock()
   private animFrame = 0
@@ -69,7 +65,12 @@ export class BowlingScene {
   private shot: ShotResult | null = null
   private ballWeightLb: number = DEFAULT_BALL_WEIGHT_LB
   private playTime = 0
-  private phase: 'idle' | 'roll' | 'gutter' | 'pins' = 'idle'
+  private phase: 'idle' | 'roll' | 'gutter' | 'pins' | 'sweep' = 'idle'
+  private onSweepDone: (() => void) | null = null
+  /** 대기 상태를 되돌릴 때 쓰는 마지막 예상 궤적. */
+  private lastPreview: ShotResult | null = null
+  /** 볼 시점이 아닐 때 공을 보여줄지. */
+  private pathBallShouldShow = true
   private pinTime = 0
   private gutterTime = 0
   private gutterSpeed = 0
@@ -87,12 +88,13 @@ export class BowlingScene {
     private canvas: HTMLCanvasElement,
     ballLook: BallLook = DEFAULT_BALL_LOOK,
   ) {
-    this.scene.background = new Color('#07080b')
+    this.scene.background = new Color('#f5f1e7')
     this.pinDeck = new PinDeckPhysics(ballLook)
     this.camera = new PerspectiveCamera(42, 1, 0.05, 80)
     this.renderer = new WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = PCFSoftShadowMap
     this.renderer.outputColorSpace = SRGBColorSpace
     this.renderer.toneMapping = ACESFilmicToneMapping
     this.renderer.toneMappingExposure = LIGHTING.toneMappingExposure
@@ -101,18 +103,6 @@ export class BowlingScene {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
     this.scene.environmentIntensity = LIGHTING.environmentIntensity
     pmrem.dispose()
-
-    this.composer = new EffectComposer(this.renderer)
-    this.composer.addPass(new RenderPass(this.scene, this.camera))
-    this.composer.addPass(
-      new UnrealBloomPass(
-        new Vector2(1, 1),
-        LIGHTING.bloomStrength,
-        LIGHTING.bloomRadius,
-        LIGHTING.bloomThreshold,
-      ),
-    )
-    this.composer.addPass(new OutputPass())
 
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.enableDamping = true
@@ -123,12 +113,21 @@ export class BowlingScene {
     this.scene.add(createLane())
     this.alley = createAlley()
     this.scene.add(this.alley)
+    const pinDeckRig = createPinDeck()
+    this.scene.add(pinDeckRig)
+    const sweepMesh = pinDeckRig.getObjectByName(SWEEP_BAR_NAME)
+    if (sweepMesh instanceof Mesh) {
+      this.pinDeck.attachSweepMesh(sweepMesh)
+    }
     this.scene.add(createLights())
     this.scene.add(this.pinDeck.group)
 
     this.pathBall = createBallMesh(ballLook)
     this.pathBall.position.set(0, BALL_RADIUS, 0)
     this.scene.add(this.pathBall)
+
+    this.camera.position.set(0, 1.35, -3.2)
+    this.controls.target.set(0, 0.2, 1.2)
 
     this.oilOverlay = createOilOverlay({
       id: 'empty',
@@ -189,15 +188,25 @@ export class BowlingScene {
     if (this.phase !== 'idle') {
       return
     }
-    if (this.pinDeck.world) {
-      this.pinDeck.resetPins()
-      this.pinDeck.hideBall()
-    }
+    this.lastPreview = result
+    // 핀덱은 건드리지 않는다. 2구 대기 중에 슬라이더를 만지면 남은 핀이 되살아난다.
+    this.pinDeck.hideBall()
+    this.showReady(result)
+  }
+
+  /**
+   * 굴리기 전 대기 화면을 만든다. 궤적을 그리고 공을 릴리즈 지점에 놓는다.
+   *
+   * 프레임 시작·핀세터 종료처럼 공을 치웠던 뒤에도 이걸로 되돌린다.
+   * @param {ShotResult} result - 예상 샷
+   */
+  private showReady(result: ShotResult): void {
     this.clearTrail()
     const trail = this.makeTrail(result)
     this.scene.add(trail)
     this.trail = trail
-    this.pathBall.visible = true
+    this.pathBallShouldShow = true
+    this.pathBall.visible = this.cameraPreset !== 2
     this.pathBall.quaternion.identity()
     const start = result.path[0]
     if (start) {
@@ -206,31 +215,53 @@ export class BowlingScene {
   }
 
   /**
+   * 공을 릴리즈 지점에 되돌리고, 추적 시점이면 카메라도 그 자리로 끌어온다.
+   */
+  private restoreReadyState(): void {
+    if (!this.lastPreview) {
+      return
+    }
+    this.showReady(this.lastPreview)
+    if (this.cameraPreset === 1) {
+      this.snapTrackCamera()
+    }
+  }
+
+  /** 추적 카메라를 공 위치로 즉시 맞춘다. 보간 없이 한 번에 붙인다. */
+  private snapTrackCamera(): void {
+    const ballPos = this.pathBall.position
+    this.camera.position.set(ballPos.x * 0.4, 1.35, ballPos.z - 3.2)
+    this.controls.target.set(ballPos.x, 0.2, ballPos.z + 1.2)
+    this.controls.update()
+  }
+
+  /**
    * 카메라 프리셋을 적용한다.
-   * @param {CameraPreset} preset - 1 볼러 / 2 추적 / 3 핀덱 / 4 탑뷰
+   * @param {CameraPreset} preset - 1 추적 / 2 볼 시점 / 3 핀덱 / 4 볼러
    */
   applyCameraPreset(preset: CameraPreset): void {
     this.cameraPreset = preset
 
     const ceiling = this.alley.getObjectByName(CEILING_GROUP_NAME)
     if (ceiling) {
-      ceiling.visible = preset !== 4
+      ceiling.visible = true
     }
-    if (preset === 2) {
+    // 추적과 볼 시점은 매 프레임 카메라를 직접 몰기 때문에 궤도 조작을 끈다.
+    if (preset === 1 || preset === 2) {
       this.controls.enabled = false
+      if (preset === 2) {
+        this.updateBallCamera()
+      }
       return
     }
     this.controls.enabled = true
-    if (preset === 1) {
-      this.camera.position.set(physXToThree(0.35), 1.45, -2.8)
-      this.controls.target.set(0, 0.15, 6)
-    } else if (preset === 3) {
-      // 피트 벽(z = LANE_LENGTH + 1.35)보다 앞에 두어야 핀이 가리지 않는다.
+    if (preset === 3) {
+      // 피트 벽보다 앞에 두어야 핀이 가리지 않는다.
       this.camera.position.set(physXToThree(0.28), 0.92, LANE_LENGTH + 1.24)
       this.controls.target.set(0, 0.26, LANE_LENGTH + 0.3)
     } else {
-      this.camera.position.set(0, 13.5, LANE_LENGTH * 0.45)
-      this.controls.target.set(0, 0, LANE_LENGTH * 0.48)
+      this.camera.position.set(-5.6, 13, -7)
+      this.controls.target.set(0, 0, 8.5)
     }
     this.controls.update()
   }
@@ -241,9 +272,14 @@ export class BowlingScene {
    * @param {PinFinish} onPinFinish - 핀 판정 콜백
    * @param {number} weightLb - 볼 무게(lb). 핀덱 충돌 질량에 쓴다.
    */
-  playShot(result: ShotResult, onPinFinish: PinFinish, weightLb = DEFAULT_BALL_WEIGHT_LB): void {
+  playShot(
+    result: ShotResult,
+    onPinFinish: PinFinish,
+    weightLb = DEFAULT_BALL_WEIGHT_LB,
+    resetDeck = true,
+  ): void {
     if (!this.pinDeck.world) {
-      void this.ready.then(() => this.playShot(result, onPinFinish, weightLb))
+      void this.ready.then(() => this.playShot(result, onPinFinish, weightLb, resetDeck))
       return
     }
     this.ballWeightLb = weightLb
@@ -254,9 +290,13 @@ export class BowlingScene {
     this.phase = 'roll'
     this.pinTime = 0
     this.onPinFinish = onPinFinish
-    this.pinDeck.resetPins()
+    // 2구째는 남아 있는 핀을 그대로 두고 굴린다.
+    if (resetDeck) {
+      this.pinDeck.resetPins()
+    }
     this.pinDeck.hideBall()
-    this.pathBall.visible = true
+    this.pathBallShouldShow = true
+    this.pathBall.visible = this.cameraPreset !== 2
     this.pathBall.quaternion.identity()
     const trail = this.makeTrail(result)
     this.scene.add(trail)
@@ -279,7 +319,6 @@ export class BowlingScene {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
-    this.composer.setSize(width, height)
     for (const line of [this.trail, this.ghost]) {
       if (line?.material instanceof LineMaterial) {
         line.material.resolution.set(width, height)
@@ -304,8 +343,9 @@ export class BowlingScene {
     const dt = Math.min(this.clock.getDelta(), 0.05)
     this.updatePlayback(dt)
     this.updateTrackCamera()
+    this.updateBallCamera()
     this.controls.update()
-    this.composer.render()
+    this.renderer.render(this.scene, this.camera)
   }
 
   private updatePlayback(dt: number): void {
@@ -333,6 +373,7 @@ export class BowlingScene {
         }
         this.phase = 'pins'
         this.pinTime = 0
+        this.pathBallShouldShow = false
         this.pathBall.visible = false
         this.pinDeck.launchBall(this.shot.pinEntry, this.ballWeightLb)
       }
@@ -350,6 +391,52 @@ export class BowlingScene {
         this.onPinFinish?.(this.pinDeck.pinResult())
       }
     }
+
+    if (this.phase === 'sweep') {
+      // 쓰러진 핀이 스위프바에 밀리도록 물리도 같이 돌린다.
+      this.pinDeck.step(dt)
+      if (this.pinDeck.updateSweep(dt)) {
+        this.phase = 'idle'
+        // 다음 투구를 위해 공과 카메라를 릴리즈 지점으로 되돌린다.
+        this.restoreReadyState()
+        const done = this.onSweepDone
+        this.onSweepDone = null
+        done?.()
+      }
+    }
+  }
+
+  /**
+   * 핀세터를 돌린다. 남은 핀을 들어올리고 쓰러진 핀을 피트로 쓸어낸 뒤 다시 세운다.
+   * @param {number[]} keepIds - 남길 핀 번호
+   * @param {() => void} onDone - 동작이 끝나면 호출
+   */
+  runPinsetter(keepIds: number[], onDone: () => void): void {
+    if (!this.pinDeck.world) {
+      void this.ready.then(() => this.runPinsetter(keepIds, onDone))
+      return
+    }
+    this.clearTrail()
+    this.pathBallShouldShow = false
+    this.pathBall.visible = false
+    this.onSweepDone = onDone
+    this.phase = 'sweep'
+    this.pinDeck.startSweep(keepIds)
+  }
+
+  /**
+   * 핀덱을 10핀 상태로 되돌린다.
+   */
+  resetDeck(): void {
+    if (!this.pinDeck.world) {
+      void this.ready.then(() => this.resetDeck())
+      return
+    }
+    this.phase = 'idle'
+    this.onSweepDone = null
+    this.pinDeck.resetPins()
+    // 프레임을 시작해도 공은 릴리즈 지점에 놓여 있어야 한다.
+    this.restoreReadyState()
   }
 
   /**
@@ -407,8 +494,61 @@ export class BowlingScene {
     this.pathBall.quaternion.premultiply(this.spinDelta)
   }
 
-  private updateTrackCamera(): void {
+  /**
+   * 볼 1인칭 시점. 공 중심에서 진행 방향을 본다.
+   *
+   * 카메라가 공 안에 있으므로 이 시점에서는 공 메시를 감춘다.
+   */
+  private updateBallCamera(): void {
     if (this.cameraPreset !== 2) {
+      this.pathBall.visible = this.pathBallShouldShow
+      this.pinDeck.setBallVisible(true)
+      return
+    }
+
+    let px = this.pathBall.position.x
+    let py = this.pathBall.position.y
+    let pz = this.pathBall.position.z
+    let dx = 0
+    let dz = 1
+
+    if (this.phase === 'pins') {
+      // 핀덱에서는 물리 볼을 따라간다.
+      const pos = this.pinDeck.ballPosition()
+      const vel = this.pinDeck.ballVelocity()
+      if (pos) {
+        px = pos.x
+        py = pos.y
+        pz = pos.z
+      }
+      if (vel && Math.hypot(vel.x, vel.z) > 0.05) {
+        dx = vel.x
+        dz = vel.z
+      }
+    } else if (this.shot) {
+      const sample = this.shot.path[this.pathIndex]
+      if (sample) {
+        dx = physXToThree(sample.vx)
+        dz = sample.vy
+      }
+    } else if (this.lastPreview) {
+      const start = this.lastPreview.path[0]
+      if (start) {
+        dx = physXToThree(start.vx)
+        dz = start.vy
+      }
+    }
+
+    const len = Math.hypot(dx, dz) || 1
+    this.camera.position.set(px, py + 0.03, pz)
+    this.controls.target.set(px + (dx / len) * 2, py + 0.03, pz + (dz / len) * 2)
+    // 공 안에서 보므로 껍질이 시야를 가리지 않게 감춘다.
+    this.pathBall.visible = false
+    this.pinDeck.setBallVisible(false)
+  }
+
+  private updateTrackCamera(): void {
+    if (this.cameraPreset !== 1) {
       return
     }
     const ballPos = this.pathBall.position

@@ -134,21 +134,21 @@ function handleBackdrop(event: MouseEvent): void {
 <template>
   <div
     v-if="isOpen"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
     @click="handleBackdrop"
     @keydown.esc="ballsStore.closeEditor()"
   >
     <form
-      class="max-h-full w-full max-w-lg space-y-4 overflow-y-auto rounded-sm border border-white/15 bg-void p-5 text-cream shadow-[0_0_40px_rgba(31,224,255,0.12)]"
+      class="max-h-full w-full max-w-lg space-y-4 overflow-y-auto rounded-sm border border-ink/20 bg-paper p-5 text-ink shadow-xl"
       @submit.prevent="save"
     >
       <div class="flex items-center justify-between">
-        <h2 class="font-ui text-xs tracking-[0.2em] text-dim uppercase">
+        <h2 class="font-ui text-xs tracking-[0.2em] text-muted uppercase">
           {{ isNew ? '새 볼' : '볼 편집' }}
         </h2>
         <button
           type="button"
-          class="font-ui text-xs text-dim hover:text-cream"
+          class="font-ui text-xs text-muted hover:text-ink"
           @click="ballsStore.closeEditor()"
         >
           닫기 · Esc
@@ -159,7 +159,7 @@ function handleBackdrop(event: MouseEvent): void {
         <span class="font-ui text-sm">이름</span>
         <input
           v-model="draft.name"
-          class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-ui text-sm"
+          class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-ui text-sm"
           type="text"
           :maxlength="BALL_LIMITS.nameLength"
           autofocus
@@ -168,10 +168,10 @@ function handleBackdrop(event: MouseEvent): void {
 
       <div class="grid grid-cols-2 gap-3">
         <label class="block space-y-1">
-          <span class="font-ui text-sm">무게 <span class="text-dim">lb</span></span>
+          <span class="font-ui text-sm">무게 <span class="text-muted">lb</span></span>
           <input
             v-model.number="draft.weightLb"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.weightLb.min"
             :max="BALL_LIMITS.weightLb.max"
@@ -179,10 +179,10 @@ function handleBackdrop(event: MouseEvent): void {
           >
         </label>
         <label class="block space-y-1">
-          <span class="font-ui text-sm">핀-CG <span class="text-dim">in</span></span>
+          <span class="font-ui text-sm">핀-CG <span class="text-muted">in</span></span>
           <input
             v-model.number="draft.pinToCg"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.pinToCg.min"
             :max="BALL_LIMITS.pinToCg.max"
@@ -196,14 +196,14 @@ function handleBackdrop(event: MouseEvent): void {
           :key="preset"
           type="button"
           class="rounded-sm px-2 py-0.5 font-mono text-[11px]"
-          :class="draft.pinToCg === preset ? 'bg-neon-cy/20 text-neon-cy' : 'text-dim'"
+          :class="draft.pinToCg === preset ? 'bg-sage/20 text-sage' : 'text-muted'"
           @click="draft.pinToCg = preset"
         >
           {{ preset }}"
         </button>
       </div>
 
-      <p class="font-ui text-[11px] leading-relaxed text-dim">
+      <p class="font-ui text-[11px] leading-relaxed text-muted">
         RG·Diff는 카탈로그의 {{ SPEC_REFERENCE_WEIGHT_LB }} lb 기준값을 넣어. 다른 무게는 무게 슬라이더가 환산한다.
       </p>
       <div class="grid grid-cols-2 gap-3">
@@ -211,7 +211,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-sm">RG</span>
           <input
             v-model.number="draft.rg"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.rg.min"
             :max="BALL_LIMITS.rg.max"
@@ -222,7 +222,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-sm">Differential</span>
           <input
             v-model.number="draft.diff"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.diff.min"
             :max="BALL_LIMITS.diff.max"
@@ -244,7 +244,7 @@ function handleBackdrop(event: MouseEvent): void {
         <span class="font-ui text-sm">Int. Differential</span>
         <input
           v-model.number="draft.intDiff"
-          class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+          class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
           type="number"
           :min="BALL_LIMITS.intDiff.min"
           :max="BALL_LIMITS.intDiff.max"
@@ -257,7 +257,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-sm">커버스톡</span>
           <select
             v-model="draft.cover"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-ui text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-ui text-sm"
           >
             <option
               v-for="option in COVER_OPTIONS"
@@ -272,7 +272,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-sm">표면</span>
           <select
             v-model="draft.grit"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-ui text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-ui text-sm"
           >
             <option
               v-for="grit in GRIT_OPTIONS"
@@ -300,7 +300,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-xs">드릴각 °</span>
           <input
             v-model.number="draft.drillAngle"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.drillAngle.min"
             :max="BALL_LIMITS.drillAngle.max"
@@ -311,7 +311,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-xs">핀-PAP in</span>
           <input
             v-model.number="draft.pinToPap"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.pinToPap.min"
             :max="BALL_LIMITS.pinToPap.max"
@@ -322,7 +322,7 @@ function handleBackdrop(event: MouseEvent): void {
           <span class="font-ui text-xs">VAL각 °</span>
           <input
             v-model.number="draft.valAngle"
-            class="w-full rounded-sm border border-white/15 bg-black/40 px-2 py-1 font-mono text-sm"
+            class="w-full rounded-sm border border-ink/20 bg-paper-dark px-2 py-1 font-mono text-sm"
             type="number"
             :min="BALL_LIMITS.valAngle.min"
             :max="BALL_LIMITS.valAngle.max"
@@ -337,7 +337,7 @@ function handleBackdrop(event: MouseEvent): void {
           <input
             v-model="draft.colorA"
             type="color"
-            class="h-7 w-14 cursor-pointer rounded-sm border border-white/15 bg-transparent"
+            class="h-7 w-14 cursor-pointer rounded-sm border border-ink/20 bg-transparent"
           >
         </label>
         <label class="flex items-center justify-between font-ui text-sm">
@@ -345,14 +345,14 @@ function handleBackdrop(event: MouseEvent): void {
           <input
             v-model="draft.colorB"
             type="color"
-            class="h-7 w-14 cursor-pointer rounded-sm border border-white/15 bg-transparent"
+            class="h-7 w-14 cursor-pointer rounded-sm border border-ink/20 bg-transparent"
           >
         </label>
       </div>
 
       <ul
         v-if="warnings.length"
-        class="space-y-1 font-ui text-[11px] leading-relaxed text-neon-mg"
+        class="space-y-1 font-ui text-[11px] leading-relaxed text-rust"
       >
         <li
           v-for="warning in warnings"
@@ -363,7 +363,7 @@ function handleBackdrop(event: MouseEvent): void {
       </ul>
       <ul
         v-if="errors.length"
-        class="space-y-1 font-ui text-[11px] leading-relaxed text-amber"
+        class="space-y-1 font-ui text-[11px] leading-relaxed text-ochre"
       >
         <li
           v-for="error in errors"
@@ -376,14 +376,14 @@ function handleBackdrop(event: MouseEvent): void {
       <div class="flex justify-end gap-2 pt-1">
         <button
           type="button"
-          class="rounded-sm border border-white/15 px-3 py-1.5 font-ui text-sm text-dim hover:text-cream"
+          class="rounded-sm border border-ink/20 px-3 py-1.5 font-ui text-sm text-muted hover:text-ink"
           @click="ballsStore.closeEditor()"
         >
           취소
         </button>
         <button
           type="submit"
-          class="rounded-sm border border-neon-cy/40 bg-neon-cy/10 px-4 py-1.5 font-ui text-sm font-semibold text-neon-cy disabled:opacity-40"
+          class="rounded-sm border border-sage/40 bg-sage/10 px-4 py-1.5 font-ui text-sm font-semibold text-sage disabled:opacity-40"
           :disabled="errors.length > 0"
         >
           {{ isNew ? '추가' : '저장' }}

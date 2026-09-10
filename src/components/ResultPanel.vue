@@ -10,8 +10,8 @@ const { result, preview, ball, pattern, hand, speedUnit } = storeToRefs(store)
 
 <template>
   <section class="space-y-3 p-4">
-    <h2 class="font-ui text-xs tracking-[0.2em] text-dim uppercase">결과</h2>
-    <p class="font-ui text-sm text-cream">
+    <h2 class="font-ui text-xs tracking-[0.2em] text-muted uppercase">결과</h2>
+    <p class="font-ui text-sm text-ink">
       {{ ball.name }} · {{ pattern.name }} · {{ handLabel(hand) }}
     </p>
     <div
@@ -20,29 +20,29 @@ const { result, preview, ball, pattern, hand, speedUnit } = storeToRefs(store)
     >
       <p>
         BP
-        <span class="text-neon-cy">{{
+        <span class="text-sage">{{
           preview.breakpointFt < 8 ? '—' : `${preview.breakpointFt.toFixed(1)} ft`
         }}</span>
       </p>
-      <p>진입각 <span class="text-neon-cy">{{ preview.entryAngleDeg.toFixed(1) }}°</span></p>
-      <p>진입 보드 <span class="text-neon-cy">{{ preview.entryBoard.toFixed(1) }}</span></p>
+      <p>진입각 <span class="text-sage">{{ preview.entryAngleDeg.toFixed(1) }}°</span></p>
+      <p>진입 보드 <span class="text-sage">{{ preview.entryBoard.toFixed(1) }}</span></p>
       <p>
         핀속도
-        <span class="text-neon-cy">{{ formatSpeed(preview.speedAtPinsMph, speedUnit) }}</span>
+        <span class="text-sage">{{ formatSpeed(preview.speedAtPinsMph, speedUnit) }}</span>
       </p>
-      <p class="text-dim">
+      <p class="text-muted">
         스키드 {{ preview.phases.skidEnd.toFixed(0) }}ft
         → 훅 {{ preview.phases.hookEnd.toFixed(0) }}ft
       </p>
       <p
         v-if="preview.gutter"
-        class="text-neon-mg"
+        class="text-rust"
       >
         GUTTER
       </p>
       <p
         v-else-if="result?.isStrike"
-        class="text-amber"
+        class="text-ochre"
       >
         ★ STRIKE
       </p>
@@ -51,7 +51,7 @@ const { result, preview, ball, pattern, hand, speedUnit } = storeToRefs(store)
       </p>
       <p
         v-else
-        class="text-dim"
+        class="text-muted"
       >
         예상 라인 · Space로 굴리기
       </p>

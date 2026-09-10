@@ -5,29 +5,45 @@ import { BowlingScene } from '@/scene/BowlingScene'
 import { useSimulatorStore } from '@/stores/simulator'
 
 const store = useSimulatorStore()
-const { ball, pattern, rollNonce, cameraPreset, result, preview, comparePreview, isRolling } =
-  storeToRefs(store)
+const {
+  ball, pattern, rollNonce, resetNonce, sweepNonce, sweepKeepIds, ballNumber,
+  cameraPreset, result, preview, comparePreview, isRolling,
+} = storeToRefs(store)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let scene: BowlingScene | null = null
 
+const loading = ref(true)
+const failure = ref(false)
+let observer: ResizeObserver | null = null
+let disposed = false
+
 onMounted(async () => {
-  if (!canvasRef.value) {
-    return
+  if (!canvasRef.value) return
+  try {
+    const instance = new BowlingScene(canvasRef.value, ball.value)
+    scene = instance
+    await instance.ready
+    if (disposed) { instance.dispose(); return }
+    instance.setPattern(pattern.value)
+    instance.applyCameraPreset(cameraPreset.value)
+    instance.showPreview(preview.value)
+    instance.showGhost(comparePreview.value)
+    observer = new ResizeObserver(handleResize)
+    observer.observe(canvasRef.value)
+    loading.value = false
+  } catch {
+    if (!disposed) { failure.value = true; loading.value = false; store.isRolling = false }
   }
-  scene = new BowlingScene(canvasRef.value, ball.value)
-  await scene.ready
-  scene.setPattern(pattern.value)
-  scene.applyCameraPreset(cameraPreset.value)
-  scene.showPreview(preview.value)
-  scene.showGhost(comparePreview.value)
-  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
+  disposed = true
+  observer?.disconnect()
   scene?.dispose()
   scene = null
 })
+
+function reload(): void { window.location.reload() }
 
 watch(pattern, (next) => {
   scene?.setPattern(next)
@@ -64,14 +80,37 @@ watch(rollNonce, async () => {
   if (!scene || !result.value) {
     return
   }
-  await scene.ready
-  scene.playShot(
-    result.value,
+  const instance = scene
+  const shot = result.value
+  await instance.ready
+  if (disposed) return
+  instance.playShot(
+    shot,
     ({ pinsDown, isStrike }) => {
       store.finishPins(pinsDown, isStrike)
     },
     ball.value.weightLb,
+    // 2구는 남아 있는 핀을 그대로 두고 굴린다.
+    ballNumber.value === 1,
   )
+})
+
+watch(resetNonce, async () => {
+  if (!scene) return
+  const instance = scene
+  await instance.ready
+  if (disposed) return
+  instance.resetDeck()
+})
+
+watch(sweepNonce, async () => {
+  if (!scene) return
+  const instance = scene
+  await instance.ready
+  if (disposed) return
+  instance.runPinsetter([...sweepKeepIds.value], () => {
+    store.finishPinsetter()
+  })
 })
 
 /**
@@ -83,8 +122,12 @@ function handleResize(): void {
 </script>
 
 <template>
+  <div class="relative h-full w-full">
   <canvas
     ref="canvasRef"
-    class="h-full w-full bg-void"
+    class="h-full w-full bg-paper"
   />
+  <div v-if="loading" class="scene-loading" role="status">PREPARING YOUR LANE…</div>
+  <div v-if="failure" class="scene-error" role="alert"><p>3D 레인을 불러오지 못했어요.</p><p>WebGL을 지원하는 브라우저에서 다시 시도해 주세요.</p><button @click="reload">다시 불러오기</button></div>
+  </div>
 </template>

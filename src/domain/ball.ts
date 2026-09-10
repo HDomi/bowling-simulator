@@ -63,7 +63,7 @@ export const NEW_BALL_TEMPLATE: Omit<Ball, 'id'> = {
   cover: 'reactive-pearl',
   grit: 2000,
   pinToCg: 2.5,
-  colors: ['#1fe0ff', '#1b2a4a'],
+  colors: ['#a74d37', '#343f39'],
 }
 
 /**

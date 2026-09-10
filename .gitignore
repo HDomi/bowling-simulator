@@ -1,0 +1,8 @@
+Mds/
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+.env.*
+coverage/

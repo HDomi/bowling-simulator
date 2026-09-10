@@ -1,20 +1,22 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 import {
   BALL_RADIUS,
+  IN,
   DEFAULT_BALL_WEIGHT_LB,
   LANE_LENGTH,
   PIN_DOWN_TILT_DEG,
   PIN_HEIGHT,
+  PIN_BASE_RADIUS,
   PIN_MASS,
-  PIN_COLLIDER_RADIUS,
   PIN_PHYSICS,
   PIN_SETTLE_MAX_S,
   PIN_SETTLE_SPEED,
 } from '@/domain/constants'
+import { pinProfile } from '@/domain/pins/profile'
 import { createPinSpots, isStrike } from '@/domain/pins/layout'
 import { ballMassKg } from '@/domain/physics/friction'
 import type { ShotResult } from '@/domain/types'
-import { createBallMesh, DEFAULT_BALL_COLORS } from '@/scene/createBallMesh'
+import { applyBallLook, createBallMesh, DEFAULT_BALL_LOOK, type BallLook } from '@/scene/createBallMesh'
 import { createPinMesh } from '@/scene/createPinMesh'
 import { physXToThree } from '@/scene/coords'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
@@ -49,10 +51,18 @@ export class PinDeckPhysics {
   private restSpotZ = LANE_LENGTH
   private stepAccumulator = 0
 
-  constructor(ballColors: [string, string] = DEFAULT_BALL_COLORS) {
-    this.ballMesh = createBallMesh(ballColors)
+  constructor(ballLook: BallLook = DEFAULT_BALL_LOOK) {
+    this.ballMesh = createBallMesh(ballLook)
     this.ballMesh.visible = false
     this.group.add(this.ballMesh)
+  }
+
+  /**
+   * 핀덱에서 굴러가는 볼의 외관을 바꾼다.
+   * @param {BallLook} look - 볼 외관
+   */
+  setBallLook(look: BallLook): void {
+    applyBallLook(this.ballMesh, look)
   }
 
   /**
@@ -61,6 +71,9 @@ export class PinDeckPhysics {
   async init(): Promise<void> {
     await RAPIER.init()
     this.world = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
+    // 작은 바닥 접촉면이 기본 허용 오차에 묻혀 흔들리지 않게 한다.
+    this.world.integrationParameters.normalizedAllowedLinearError = 0.00005
+    this.world.numSolverIterations = 8
     this.eventQueue = new RAPIER.EventQueue(true)
 
     const floor = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
@@ -88,13 +101,39 @@ export class PinDeckPhysics {
           .setLinearDamping(0.15)
           .setAngularDamping(0.2),
       )
+      // 인접 단면 사이를 볼록 절두체로 나눠 목의 오목한 곡면을 보존한다.
+      // 전체를 단일 convex hull로 감싸면 목이 채워져 잘못 충돌한다.
+      // 바닥 평면은 해석적 원기둥으로 접촉시킨다. 다면체 바닥의 단일점 접촉 흔들림을 피한다.
       this.world.createCollider(
-        RAPIER.ColliderDesc.cylinder(PIN_HEIGHT / 2, PIN_COLLIDER_RADIUS)
-          .setMass(PIN_MASS)
-          .setFriction(0.35)
-          .setRestitution(0.48),
-        body,
+        RAPIER.ColliderDesc.cylinder(0.0005, PIN_BASE_RADIUS)
+          .setTranslation(0, -PIN_HEIGHT / 2 + 0.0005, 0)
+          .setMass(0).setFriction(0.35).setRestitution(0.12), body,
       )
+      const profile = pinProfile().filter(p => p.y > 0)
+      const cuts = [0, 7.25, 8.625, 9.375, 10, 10.875, 11.75, 12.625, 15]
+      const sections = cuts.slice(1).map((end, i) =>
+        profile.filter(p => p.y >= cuts[i] * IN - 1e-8 && p.y <= end * IN + 1e-8),
+      )
+      const volumes = sections.map(points => points.slice(1).reduce((sum, p, i) => {
+        const a = points[i]
+        return sum + (p.y - a.y) * (a.radius ** 2 + a.radius * p.radius + p.radius ** 2)
+      }, 0))
+      const total = volumes.reduce((a, b) => a + b, 0)
+      for (let i = 0; i < sections.length; i += 1) {
+        const vertices: number[] = []
+        for (const point of sections[i]) {
+          for (let side = 0; side < 24; side += 1) {
+            const angle = side * Math.PI * 2 / 24
+            vertices.push(point.radius * Math.cos(angle), point.y - PIN_HEIGHT / 2, point.radius * Math.sin(angle))
+          }
+        }
+        const collider = RAPIER.ColliderDesc.convexHull(new Float32Array(vertices))
+        if (!collider) throw new Error('핀 곡면 충돌체 생성 실패')
+        this.world.createCollider(
+          collider.setMass(PIN_MASS * volumes[i] / total).setFriction(0.35).setRestitution(0.48),
+          body,
+        )
+      }
       this.pins.push({ id: spot.id, mesh, body })
     }
   }

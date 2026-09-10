@@ -1,58 +1,39 @@
-import {
-  PIN_BASE_RADIUS,
-  PIN_HEAD_RADIUS,
-  PIN_HEIGHT,
-  PIN_MAX_RADIUS,
-  PIN_NECK_RADIUS,
-} from '@/domain/constants'
-import {
-  Color,
-  LatheGeometry,
-  Mesh,
-  MeshStandardMaterial,
-  Vector2,
-} from 'three'
+import { IN } from '@/domain/constants'
+import { pinProfile, PIN_STRIPES } from '@/domain/pins/profile'
+import { LatheGeometry, Mesh, MeshStandardMaterial, Vector2 } from 'three'
 
-/**
- * USBC 핀 실루엣을 선반 기하로 만든다.
- * @returns {LatheGeometry} 핀 지오메트리
- */
-function createPinGeometry(): LatheGeometry {
-  const h = PIN_HEIGHT
-  const pts = [
-    new Vector2(0, 0),
-    new Vector2(PIN_BASE_RADIUS, 0),
-    new Vector2(PIN_BASE_RADIUS * 1.08, h * 0.04),
-    new Vector2(PIN_MAX_RADIUS * 0.72, h * 0.16),
-    new Vector2(PIN_MAX_RADIUS * 0.94, h * 0.25),
-    new Vector2(PIN_MAX_RADIUS, h * 0.31),
-    new Vector2(PIN_MAX_RADIUS * 0.9, h * 0.42),
-    new Vector2(PIN_MAX_RADIUS * 0.58, h * 0.54),
-    new Vector2(PIN_NECK_RADIUS * 1.15, h * 0.62),
-    new Vector2(PIN_NECK_RADIUS, h * 0.68),
-    new Vector2(PIN_NECK_RADIUS * 1.08, h * 0.78),
-    new Vector2(PIN_HEAD_RADIUS, h * 0.9),
-    new Vector2(PIN_HEAD_RADIUS * 0.62, h * 0.97),
-    new Vector2(0, h),
-  ]
-  return new LatheGeometry(pts, 24)
+/** 공식 측정점을 통과하는 매끈한 회전체. 바닥은 닫고 머리는 원호로 마감한다. */
+export function createPinGeometry(): LatheGeometry {
+  const profile = [{ radius: 0, y: 0 }, ...pinProfile()]
+  const geometry = new LatheGeometry(profile.map(p => new Vector2(p.radius, p.y)), 64)
+  // 인덱스를 흰 표면/빨간 표면으로 묶어 핀당 드로 콜 두 번만 사용한다.
+  const segments = profile.length - 1
+  const source = geometry.getIndex()!
+  const indices: number[][] = [[], []]
+  for (let ring = 0; ring < 64; ring += 1) {
+    for (let i = 0; i < segments; i += 1) {
+      const height = (profile[i].y + profile[i + 1].y) / (2 * IN)
+      const red = PIN_STRIPES.some(([lo, hi]) => height > lo && height < hi)
+      const start = (ring * segments + i) * 6
+      for (let j = 0; j < 6; j += 1) indices[red ? 1 : 0].push(source.getX(start + j))
+    }
+  }
+  geometry.setIndex([...indices[0], ...indices[1]])
+  geometry.clearGroups()
+  geometry.addGroup(0, indices[0].length, 0)
+  geometry.addGroup(indices[0].length, indices[1].length, 1)
+  return geometry
 }
 
 const pinGeometry = createPinGeometry()
+const materials = [
+  new MeshStandardMaterial({ color: '#fffaf2', roughness: 0.28, metalness: 0 }),
+  new MeshStandardMaterial({ color: '#c91825', roughness: 0.3, metalness: 0 }),
+]
 
-/**
- * 크림색 핀 메시를 만든다.
- * @returns {Mesh} 핀
- */
+/** 흰 코팅과 빨간 목띠 두 줄을 가진 핀. */
 export function createPinMesh(): Mesh {
-  const material = new MeshStandardMaterial({
-    color: new Color('#e8e4dc'),
-    emissive: new Color('#2f6ea8'),
-    emissiveIntensity: 0.18,
-    roughness: 0.42,
-    metalness: 0.04,
-  })
-  const mesh = new Mesh(pinGeometry, material)
+  const mesh = new Mesh(pinGeometry, materials)
   mesh.castShadow = true
   mesh.receiveShadow = true
   return mesh

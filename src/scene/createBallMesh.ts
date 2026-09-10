@@ -1,4 +1,6 @@
 import { BALL_RADIUS, IN } from '@/domain/constants'
+import { gritFrictionScale, gritToRa } from '@/domain/physics/friction'
+import type { Ball, CoverType } from '@/domain/types'
 import {
   CanvasTexture,
   Color,
@@ -11,6 +13,15 @@ import {
 /** 볼 색이 주어지지 않았을 때 쓰는 루비/스모크 조합. */
 export const DEFAULT_BALL_COLORS: [string, string] = ['#c2101f', '#6b6577']
 
+/** 볼 외관에 필요한 필드만. 스펙(RG·Diff)은 외관에 관여하지 않는다. */
+export type BallLook = Pick<Ball, 'colors' | 'cover' | 'grit'>
+
+export const DEFAULT_BALL_LOOK: BallLook = {
+  colors: DEFAULT_BALL_COLORS,
+  cover: 'reactive-pearl',
+  grit: 2000,
+}
+
 const TEXTURE_WIDTH = 1024
 const TEXTURE_HEIGHT = 512
 
@@ -20,6 +31,82 @@ const PX_PER_IN = TEXTURE_WIDTH / (Math.PI * (BALL_RADIUS * 2) / IN)
 const FINGER_HOLE_RADIUS_IN = 0.5
 const THUMB_HOLE_RADIUS_IN = 0.62
 const HOLE_SPAN_IN = 4.25
+
+type CoverLook = {
+  roughness: number
+  clearcoat: number
+  clearcoatRoughness: number
+  iridescence: number
+  /** 펄 입자를 흩뿌리는 밀도 배율. 0이면 없다. */
+  flecks: number
+  /** 두 색을 섞는 소용돌이 대비. 낮으면 단색에 가깝다. */
+  swirl: number
+  emissiveIntensity: number
+}
+
+/**
+ * 커버스톡별 표면 질감.
+ *
+ * 폴리는 유리처럼 매끈하고, 우레탄은 무광에 가깝다. 펄은 마이카 입자가 반짝이고
+ * 솔리드는 입자 없이 살짝 거칠다. 파티클은 가장 거칠다. 그릿은 이 위에
+ * 거칠기를 더한다.
+ */
+const COVER_LOOK: Record<CoverType, CoverLook> = {
+  polyester: {
+    roughness: 0.06,
+    clearcoat: 1,
+    clearcoatRoughness: 0.03,
+    iridescence: 0,
+    flecks: 0,
+    swirl: 0.6,
+    emissiveIntensity: 0.1,
+  },
+  urethane: {
+    roughness: 0.5,
+    clearcoat: 0.15,
+    clearcoatRoughness: 0.4,
+    iridescence: 0,
+    flecks: 0,
+    swirl: 0.35,
+    emissiveIntensity: 0.06,
+  },
+  'reactive-pearl': {
+    roughness: 0.14,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
+    iridescence: 0.6,
+    flecks: 1,
+    swirl: 1,
+    emissiveIntensity: 0.16,
+  },
+  'reactive-hybrid': {
+    roughness: 0.22,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0.12,
+    iridescence: 0.3,
+    flecks: 0.5,
+    swirl: 1,
+    emissiveIntensity: 0.14,
+  },
+  'reactive-solid': {
+    roughness: 0.34,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.2,
+    iridescence: 0,
+    flecks: 0,
+    swirl: 1,
+    emissiveIntensity: 0.12,
+  },
+  particle: {
+    roughness: 0.62,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.5,
+    iridescence: 0,
+    flecks: 0.25,
+    swirl: 0.8,
+    emissiveIntensity: 0.08,
+  },
+}
 
 /**
  * 씨앗 하나로 같은 무늬가 재현되는 난수를 만든다.
@@ -95,30 +182,33 @@ function strokeWave(
 /**
  * 두 색이 섞인 대리석 소용돌이를 그린다.
  * @param {CanvasRenderingContext2D} ctx - 캔버스 컨텍스트
- * @param {string} ruby - 주 색
- * @param {string} smoke - 보조 색
+ * @param {string} primary - 주 색
+ * @param {string} secondary - 보조 색
+ * @param {number} swirl - 대비 0~1. 낮으면 보조색 단색에 가깝다
  * @param {() => number} random - 난수 생성기
  */
 function paintSwirls(
   ctx: CanvasRenderingContext2D,
-  ruby: string,
-  smoke: string,
+  primary: string,
+  secondary: string,
+  swirl: number,
   random: () => number,
 ): void {
-  const smokeColor = new Color(smoke)
-  const rubyColor = new Color(ruby)
+  const secondaryColor = new Color(secondary)
+  const primaryColor = new Color(primary)
 
   const base = ctx.createLinearGradient(0, 0, 0, TEXTURE_HEIGHT)
-  base.addColorStop(0, smokeColor.clone().multiplyScalar(0.5).getStyle())
-  base.addColorStop(0.5, smokeColor.getStyle())
-  base.addColorStop(1, smokeColor.clone().multiplyScalar(0.5).getStyle())
+  base.addColorStop(0, secondaryColor.clone().multiplyScalar(0.5).getStyle())
+  base.addColorStop(0.5, secondaryColor.getStyle())
+  base.addColorStop(1, secondaryColor.clone().multiplyScalar(0.5).getStyle())
   ctx.fillStyle = base
   ctx.fillRect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT)
 
-  // 넓은 색 덩어리로 루비/스모크 영역을 크게 나눈다.
-  for (let i = 0; i < 14; i += 1) {
-    const toRuby = random() > 0.4
-    const color = (toRuby ? rubyColor : smokeColor).clone()
+  // 넓은 색 덩어리로 주/보조 영역을 크게 나눈다.
+  const blobCount = Math.round(14 * swirl)
+  for (let i = 0; i < blobCount; i += 1) {
+    const toPrimary = random() > 0.4
+    const color = (toPrimary ? primaryColor : secondaryColor).clone()
     color.multiplyScalar(0.45 + random() * 1.1)
     paintBlob(
       ctx,
@@ -131,13 +221,14 @@ function paintSwirls(
 
   // 그 위에 흐르는 결을 얹어 대리석처럼 만든다.
   ctx.lineCap = 'round'
-  for (let band = 0; band < 34; band += 1) {
+  const bandCount = Math.round(34 * swirl)
+  for (let band = 0; band < bandCount; band += 1) {
     const roll = random()
     const color =
       roll > 0.62
-        ? rubyColor.clone().multiplyScalar(0.8 + random() * 0.8)
+        ? primaryColor.clone().multiplyScalar(0.8 + random() * 0.8)
         : roll > 0.28
-          ? smokeColor.clone().multiplyScalar(0.5 + random() * 1.1)
+          ? secondaryColor.clone().multiplyScalar(0.5 + random() * 1.1)
           : new Color('#100c12')
 
     ctx.strokeStyle = color.getStyle()
@@ -157,10 +248,16 @@ function paintSwirls(
 /**
  * 펄 반짝임(미세 입자)을 흩뿌린다.
  * @param {CanvasRenderingContext2D} ctx - 캔버스 컨텍스트
+ * @param {number} density - 밀도 배율. 1이면 4200개
  * @param {() => number} random - 난수 생성기
  */
-function paintPearlFlecks(ctx: CanvasRenderingContext2D, random: () => number): void {
-  for (let i = 0; i < 4200; i += 1) {
+function paintPearlFlecks(
+  ctx: CanvasRenderingContext2D,
+  density: number,
+  random: () => number,
+): void {
+  const count = Math.round(4200 * density)
+  for (let i = 0; i < count; i += 1) {
     const x = random() * TEXTURE_WIDTH
     const y = random() * TEXTURE_HEIGHT
     const radius = 0.4 + random() * 1.4
@@ -198,13 +295,17 @@ function paintHole(
 }
 
 /**
- * 펄 리액티브 볼 표면 텍스처를 만든다. 무늬와 지공이 있어 회전이 눈에 보인다.
+ * 볼 표면 텍스처를 만든다. 무늬와 지공이 있어 회전이 눈에 보인다.
  *
  * 캔버스가 없는 헤드리스 환경(노드 테스트)에서는 null을 돌려주고 단색으로 떨어진다.
- * @param {[string, string]} colors - [주 색, 보조 색]
+ * @param {BallLook} look - 볼 외관
+ * @param {{ holes?: boolean }} options - holes=false면 지공을 그리지 않는다(뷰어가 3D로 그릴 때)
  * @returns {CanvasTexture | null} 볼 텍스처
  */
-export function createBallTexture(colors: [string, string]): CanvasTexture | null {
+export function createBallTexture(
+  look: BallLook,
+  options: { holes?: boolean } = {},
+): CanvasTexture | null {
   if (typeof document === 'undefined') {
     return null
   }
@@ -217,16 +318,21 @@ export function createBallTexture(colors: [string, string]): CanvasTexture | nul
     return null
   }
 
+  const coverLook = COVER_LOOK[look.cover] ?? COVER_LOOK['reactive-pearl']
   const random = createRandom(0x9e3779b9)
-  paintSwirls(ctx, colors[0], colors[1], random)
-  paintPearlFlecks(ctx, random)
+  paintSwirls(ctx, look.colors[0], look.colors[1], coverLook.swirl, random)
+  if (coverLook.flecks > 0) {
+    paintPearlFlecks(ctx, coverLook.flecks, random)
+  }
 
-  const centerX = TEXTURE_WIDTH * 0.5
-  const centerY = TEXTURE_HEIGHT * 0.5
-  const span = HOLE_SPAN_IN * PX_PER_IN
-  paintHole(ctx, centerX - span * 0.28, centerY - span * 0.34, FINGER_HOLE_RADIUS_IN)
-  paintHole(ctx, centerX + span * 0.28, centerY - span * 0.34, FINGER_HOLE_RADIUS_IN)
-  paintHole(ctx, centerX, centerY + span * 0.42, THUMB_HOLE_RADIUS_IN)
+  if (options.holes !== false) {
+    const centerX = TEXTURE_WIDTH * 0.5
+    const centerY = TEXTURE_HEIGHT * 0.5
+    const span = HOLE_SPAN_IN * PX_PER_IN
+    paintHole(ctx, centerX - span * 0.28, centerY - span * 0.34, FINGER_HOLE_RADIUS_IN)
+    paintHole(ctx, centerX + span * 0.28, centerY - span * 0.34, FINGER_HOLE_RADIUS_IN)
+    paintHole(ctx, centerX, centerY + span * 0.42, THUMB_HOLE_RADIUS_IN)
+  }
 
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
@@ -235,28 +341,72 @@ export function createBallTexture(colors: [string, string]): CanvasTexture | nul
 }
 
 /**
- * 펄 광택이 도는 볼 메시를 만든다.
- * @param {[string, string]} colors - [주 색, 보조 색]
- * @returns {Mesh} 볼 메시
+ * 그릿이 거칠수록 표면 거칠기를 더한다. 폴리시(Ra 6)는 0, 180방(Ra 70)은 약 +0.32다.
+ * @param {BallLook['grit']} grit - 표면 그릿
+ * @returns {number} 거칠기 가산
  */
-export function createBallMesh(colors: [string, string]): Mesh {
-  const map = createBallTexture(colors)
-  const material = new MeshPhysicalMaterial({
+function gritRoughness(grit: BallLook['grit']): number {
+  const ra = gritToRa(grit)
+  return Math.max(0, (gritFrictionScale(ra) - gritFrictionScale(6)) * 0.42)
+}
+
+/**
+ * 커버·그릿·색에 맞는 볼 머티리얼을 만든다.
+ * @param {BallLook} look - 볼 외관
+ * @param {{ holes?: boolean }} options - 텍스처 옵션
+ * @returns {MeshPhysicalMaterial} 머티리얼
+ */
+export function createBallMaterial(
+  look: BallLook,
+  options: { holes?: boolean } = {},
+): MeshPhysicalMaterial {
+  const coverLook = COVER_LOOK[look.cover] ?? COVER_LOOK['reactive-pearl']
+  const map = createBallTexture(look, options)
+  return new MeshPhysicalMaterial({
     map,
-    color: new Color(map ? '#ffffff' : colors[1]),
-    roughness: 0.16,
+    color: new Color(map ? '#ffffff' : look.colors[1]),
+    roughness: Math.min(0.95, coverLook.roughness + gritRoughness(look.grit)),
     metalness: 0,
-    clearcoat: 1,
-    clearcoatRoughness: 0.06,
-    iridescence: 0.55,
+    clearcoat: coverLook.clearcoat,
+    clearcoatRoughness: Math.min(0.9, coverLook.clearcoatRoughness + gritRoughness(look.grit) * 0.6),
+    iridescence: coverLook.iridescence,
     iridescenceIOR: 1.35,
     iridescenceThicknessRange: [120, 520],
-    emissive: new Color(colors[0]),
-    emissiveIntensity: 0.16,
+    emissive: new Color(look.colors[0]),
+    emissiveIntensity: coverLook.emissiveIntensity,
     envMapIntensity: 1.4,
   })
+}
 
-  const mesh = new Mesh(new SphereGeometry(BALL_RADIUS, 48, 36), material)
+/**
+ * 볼 머티리얼과 텍스처를 해제한다.
+ * @param {MeshPhysicalMaterial} material - 머티리얼
+ */
+export function disposeBallMaterial(material: MeshPhysicalMaterial): void {
+  material.map?.dispose()
+  material.dispose()
+}
+
+/**
+ * 볼 메시를 만든다.
+ * @param {BallLook} look - 볼 외관
+ * @returns {Mesh} 볼 메시
+ */
+export function createBallMesh(look: BallLook = DEFAULT_BALL_LOOK): Mesh {
+  const mesh = new Mesh(new SphereGeometry(BALL_RADIUS, 48, 36), createBallMaterial(look))
   mesh.castShadow = true
   return mesh
+}
+
+/**
+ * 기존 볼 메시의 외관을 바꾼다. 이전 머티리얼은 해제한다.
+ * @param {Mesh} mesh - 볼 메시
+ * @param {BallLook} look - 새 외관
+ */
+export function applyBallLook(mesh: Mesh, look: BallLook): void {
+  const previous = mesh.material
+  mesh.material = createBallMaterial(look)
+  if (previous instanceof MeshPhysicalMaterial) {
+    disposeBallMaterial(previous)
+  }
 }

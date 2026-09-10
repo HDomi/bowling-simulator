@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { useBallsStore } from '@/stores/balls'
 import { useSimulatorStore } from '@/stores/simulator'
 
 const store = useSimulatorStore()
+const ballsStore = useBallsStore()
 const { isRolling } = storeToRefs(store)
+const { activeBall, sheetOpen } = storeToRefs(ballsStore)
 </script>
 
 <template>
@@ -15,6 +18,13 @@ const { isRolling } = storeToRefs(store)
       <span class="mb-1 font-ui text-xs text-dim">SIMULATOR</span>
     </div>
     <div class="flex items-center gap-2">
+      <button
+        class="max-w-[9rem] truncate rounded-sm border border-white/15 px-3 py-2 font-ui text-xs lg:hidden"
+        :class="sheetOpen ? 'bg-neon-cy/20 text-neon-cy' : 'text-cream'"
+        @click="ballsStore.toggleSheet()"
+      >
+        🎳 {{ activeBall.name }}
+      </button>
       <button
         class="rounded-sm border border-neon-cy/40 bg-neon-cy/10 px-4 py-2 font-ui text-sm font-semibold text-neon-cy disabled:opacity-40"
         :disabled="isRolling"

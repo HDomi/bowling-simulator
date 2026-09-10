@@ -10,12 +10,12 @@ import {
 import type { PathSample, Pattern, ShotResult } from '@/domain/types'
 import { physXToThree, sampleToBallPos } from '@/scene/coords'
 import { CEILING_GROUP_NAME, createAlley } from '@/scene/createAlley'
-import { createBallMesh, DEFAULT_BALL_COLORS } from '@/scene/createBallMesh'
+import { applyBallLook, createBallMesh, DEFAULT_BALL_LOOK, type BallLook } from '@/scene/createBallMesh'
 import { createLane } from '@/scene/createLane'
 import { createLights } from '@/scene/createLights'
 import { createOilOverlay, updateOilOverlay } from '@/scene/oilTexture'
 import { PinDeckPhysics } from '@/scene/PinDeckPhysics'
-import { createTrail } from '@/scene/trail'
+import { createTrail, disposeTrail } from '@/scene/trail'
 import {
   ACESFilmicToneMapping,
   Clock,
@@ -64,6 +64,8 @@ export class BowlingScene {
   private oilOverlay: Mesh
   private pinDeck: PinDeckPhysics
   private trail: Line2 | null = null
+  /** 직전 볼의 비교 궤적. 재생 중에도 그대로 둔다. */
+  private ghost: Line2 | null = null
   private shot: ShotResult | null = null
   private ballWeightLb: number = DEFAULT_BALL_WEIGHT_LB
   private playTime = 0
@@ -83,10 +85,10 @@ export class BowlingScene {
 
   constructor(
     private canvas: HTMLCanvasElement,
-    ballColors: [string, string] = DEFAULT_BALL_COLORS,
+    ballLook: BallLook = DEFAULT_BALL_LOOK,
   ) {
     this.scene.background = new Color('#07080b')
-    this.pinDeck = new PinDeckPhysics(ballColors)
+    this.pinDeck = new PinDeckPhysics(ballLook)
     this.camera = new PerspectiveCamera(42, 1, 0.05, 80)
     this.renderer = new WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -124,7 +126,7 @@ export class BowlingScene {
     this.scene.add(createLights())
     this.scene.add(this.pinDeck.group)
 
-    this.pathBall = createBallMesh(ballColors)
+    this.pathBall = createBallMesh(ballLook)
     this.pathBall.position.set(0, BALL_RADIUS, 0)
     this.scene.add(this.pathBall)
 
@@ -150,6 +152,33 @@ export class BowlingScene {
    */
   setPattern(pattern: Pattern): void {
     updateOilOverlay(this.oilOverlay, pattern)
+  }
+
+  /**
+   * 레인 위 볼과 핀덱 볼의 외관을 바꾼다. 볼을 전환했을 때 부른다.
+   * @param {BallLook} look - 볼 외관
+   */
+  setBallLook(look: BallLook): void {
+    applyBallLook(this.pathBall, look)
+    this.pinDeck.setBallLook(look)
+  }
+
+  /**
+   * 직전 볼의 비교 궤적을 겹쳐 보인다. null이면 지운다.
+   * @param {ShotResult | null} result - 비교 샷
+   */
+  showGhost(result: ShotResult | null): void {
+    if (this.ghost) {
+      this.scene.remove(this.ghost)
+      disposeTrail(this.ghost)
+      this.ghost = null
+    }
+    if (!result) {
+      return
+    }
+    const ghost = this.makeTrail(result, true)
+    this.scene.add(ghost)
+    this.ghost = ghost
   }
 
   /**
@@ -251,8 +280,10 @@ export class BowlingScene {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height, false)
     this.composer.setSize(width, height)
-    if (this.trail?.material instanceof LineMaterial) {
-      this.trail.material.resolution.set(width, height)
+    for (const line of [this.trail, this.ghost]) {
+      if (line?.material instanceof LineMaterial) {
+        line.material.resolution.set(width, height)
+      }
     }
   }
 
@@ -261,6 +292,8 @@ export class BowlingScene {
    */
   dispose(): void {
     cancelAnimationFrame(this.animFrame)
+    this.clearTrail()
+    this.showGhost(null)
     this.pinDeck.dispose()
     this.controls.dispose()
     this.renderer.dispose()
@@ -389,26 +422,22 @@ export class BowlingScene {
   /**
    * 현재 캔버스 해상도로 궤적 메시를 만든다.
    * @param {ShotResult} result - 샷 결과
+   * @param {boolean} ghost - 비교용 고스트 여부
    * @returns {Line2} 궤적
    */
-  private makeTrail(result: ShotResult): Line2 {
+  private makeTrail(result: ShotResult, ghost = false): Line2 {
     return createTrail(
       result,
       Math.max(this.canvas.clientWidth, 1),
       Math.max(this.canvas.clientHeight, 1),
+      { ghost },
     )
   }
 
   private clearTrail(): void {
     if (this.trail) {
       this.scene.remove(this.trail)
-      this.trail.geometry.dispose()
-      const mat = this.trail.material
-      if (Array.isArray(mat)) {
-        mat.forEach((item) => item.dispose())
-      } else {
-        mat.dispose()
-      }
+      disposeTrail(this.trail)
       this.trail = null
     }
   }

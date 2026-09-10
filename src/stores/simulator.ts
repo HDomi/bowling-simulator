@@ -1,17 +1,21 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { EXAMPLE_BALL } from '@/domain/ball'
 import { DEFAULT_RELEASE, HARRY } from '@/domain/constants'
 import { defaultLineForHand, mirrorBoard, type Hand } from '@/domain/hand'
 import { getPatternById, PATTERN_PRESETS } from '@/domain/patterns/presets'
 import { simulateShot } from '@/domain/physics/simulate'
 import { getReleaseStyleById, matchReleaseStyleId } from '@/domain/styles'
 import { kmhToMph, type SpeedUnit } from '@/domain/units'
+import { useBallsStore } from '@/stores/balls'
 import type { CameraPreset } from '@/scene/BowlingScene'
-import type { ShotResult } from '@/domain/types'
+import type { ReleaseInput, ShotResult } from '@/domain/types'
 
 export const useSimulatorStore = defineStore('simulator', () => {
-  const ball = ref(EXAMPLE_BALL)
+  const ballsStore = useBallsStore()
+  /** 활성 볼의 실효 스펙. 무게 슬라이더를 돌리면 RG·Diff가 따라 바뀐 상태다. */
+  const ball = computed(() => ballsStore.simBall)
+  /** 직전 볼(비교용). 없으면 null. */
+  const compareBall = computed(() => ballsStore.simCompareBall)
   const patternId = ref('montreal')
   const pattern = computed(() => getPatternById(patternId.value))
   const speedMph = ref<number>(kmhToMph(DEFAULT_RELEASE.speedKmh))
@@ -37,16 +41,21 @@ export const useSimulatorStore = defineStore('simulator', () => {
     }),
   )
 
-  const preview = computed(() =>
-    simulateShot(ball.value, pattern.value, {
-      speedMph: speedMph.value,
-      revRate: revRate.value,
-      releaseBoard: releaseBoard.value,
-      targetBoard: targetBoard.value,
-      axisRotation: axisRotation.value,
-      axisTilt: axisTilt.value,
-      hand: hand.value,
-    }),
+  const release = computed<ReleaseInput>(() => ({
+    speedMph: speedMph.value,
+    revRate: revRate.value,
+    releaseBoard: releaseBoard.value,
+    targetBoard: targetBoard.value,
+    axisRotation: axisRotation.value,
+    axisTilt: axisTilt.value,
+    hand: hand.value,
+  }))
+
+  const preview = computed(() => simulateShot(ball.value, pattern.value, release.value))
+
+  /** 직전 볼을 같은 라인으로 굴린 궤적. 볼을 바꿨을 때 차이를 겹쳐 보인다. */
+  const comparePreview = computed(() =>
+    compareBall.value ? simulateShot(compareBall.value, pattern.value, release.value) : null,
   )
 
   /**
@@ -120,6 +129,7 @@ export const useSimulatorStore = defineStore('simulator', () => {
 
   return {
     ball,
+    compareBall,
     patternId,
     pattern,
     speedMph,
@@ -136,7 +146,9 @@ export const useSimulatorStore = defineStore('simulator', () => {
     rollNonce,
     presets,
     styleId,
+    release,
     preview,
+    comparePreview,
     roll,
     finishPins,
     setCamera,

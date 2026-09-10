@@ -33,9 +33,10 @@ export const PIN_MAX_RADIUS = (PIN_BELLY_DIAMETER_IN / 2) * IN
 export const PIN_BASE_RADIUS = (PIN_BASE_DIAMETER_IN / 2) * IN
 export const PIN_NECK_RADIUS = (PIN_NECK_DIAMETER_IN / 2) * IN
 export const PIN_HEAD_RADIUS = (PIN_HEAD_DIAMETER_IN / 2) * IN
+/** USBC 03/2026 목표 3 lb 8 oz. 허용 범위 3 lb 6 oz–3 lb 10 oz. */
 export const PIN_MASS = 3.5 * LB
-/** 핀 충돌체 반지름. 병 모양을 원기둥으로 근사하므로 최대 반지름보다 작게 잡는다. */
-export const PIN_COLLIDER_RADIUS = PIN_MAX_RADIUS * 0.72
+/** 곡면 충돌체의 최대 반지름. 인계 시 겹침 방지에 사용한다. */
+export const PIN_COLLIDER_RADIUS = PIN_MAX_RADIUS
 export const PIN_SPACING = 12 * IN
 export const PIN_ROW_SPACING = PIN_SPACING * Math.cos(Math.PI / 6)
 
@@ -191,7 +192,7 @@ export const PHASE_DETECT = {
 /**
  * 궤적 적분을 끝내고 핀덱 물리로 넘기는 다운레인 위치(m).
  *
- * 1번 핀 중심이 LANE_LENGTH이므로, 그 자리에 공을 생성하면 반지름 합(0.152 m)보다
+ * 1번 핀 중심이 LANE_LENGTH이므로, 그 자리에 공을 생성하면 반지름 합보다
  * 가까운 0.072 m 거리에 놓여 **핀에 파고든 상태로 물리가 시작된다.** CCD는 이미
  * 겹친 채 생성된 물체를 구제하지 못하므로, 닿기 전에 넘겨야 한다.
  */
@@ -202,7 +203,7 @@ export const PIN_HANDOFF_Y =
  * 핀덱 물리 스텝.
  *
  * 프레임 시간을 그대로 쓰면 공이 한 스텝에 핀 지름보다 멀리 움직여 뚫고 지나간다.
- * (진입 속도 약 6 m/s × 1/45s = 0.13 m > 핀 콜라이더 지름 0.09 m)
+ * (진입 속도 약 6 m/s × 1/45s = 0.13 m > 핀 최대 지름 0.121 m)
  * 고정 스텝으로 잘게 밟고, 프레임이 밀리면 최대 횟수에서 끊는다.
  */
 export const PIN_PHYSICS = {

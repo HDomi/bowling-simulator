@@ -73,6 +73,7 @@ function roll(entry: ReturnType<typeof entryAt>): number {
   return deck.pinsDown().length
 }
 
+// 복합 곡면 충돌체로 수십 회 투구하는 두 묶음만 60초를 허용한다.
 describe('핀덱 터널링', () => {
   it('포켓으로 들어가면 핀이 넘어진다', () => {
     expect(roll(entryAt(17.5, 15, 4))).toBeGreaterThan(0)
@@ -102,7 +103,7 @@ describe('핀덱 터널링', () => {
       }
     }
     expect(zeros).toEqual([])
-  })
+  }, 60000)
 })
 
 describe('핀덱 인계 지점', () => {
@@ -171,5 +172,5 @@ describe('실제 시뮬 경로로 굴리기', () => {
       }
     }
     expect(zeros).toEqual([])
-  })
+  }, 60000)
 })

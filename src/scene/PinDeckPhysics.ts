@@ -33,7 +33,7 @@ import {
   type BallLook,
 } from '@/scene/createBallMesh'
 import { createPinMesh } from '@/scene/createPinMesh'
-import { physXToThree } from '@/scene/coords'
+import { physOmegaToThree, physXToThree } from '@/scene/coords'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
 
 type PinBody = {
@@ -320,7 +320,7 @@ export class PinDeckPhysics {
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(x, BALL_RADIUS, z)
         .setLinvel(physXToThree(entry.vx), 0, entry.vy)
-        .setAngvel({ x: -entry.wx, y: entry.wz, z: -entry.wy })
+        .setAngvel(physOmegaToThree({ x: entry.wx, y: entry.wy, z: entry.wz }))
         .setCcdEnabled(true)
         .setLinearDamping(0.02)
         .setAngularDamping(0.04),

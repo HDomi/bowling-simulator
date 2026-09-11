@@ -245,24 +245,72 @@ const MACCORMACK = /* glsl */ `
   varying vec2 vUv;
   ${DISTANCE_HELPERS}
 
+  /** 밝기. 어느 이웃이 더 밝고 어두운지 고르는 데만 쓴다. */
+  float luma(vec3 c) {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+  }
+
+  /**
+   * 한 채널이 [lo, hi]를 벗어나지 않게 하는 보정 비율의 상한.
+   * @returns 보정을 이 비율까지 곱하면 그 채널은 범위 안에 남는다
+   */
+  float limitAxis(float base, float delta, float lo, float hi) {
+    if (delta > 1e-6) {
+      return (hi - base) / delta;
+    }
+    if (delta < -1e-6) {
+      return (lo - base) / delta;
+    }
+    return 1.0;
+  }
+
   void main() {
-    vec4 forward = texture2D(uForward, vUv);
-    vec4 backward = texture2D(uBackward, vUv);
-    vec4 origin = texture2D(uSource, vUv);
-    vec4 corrected = forward + 0.5 * (origin - backward);
+    vec3 forward = texture2D(uForward, vUv).rgb;
+    vec3 backward = texture2D(uBackward, vUv).rgb;
+    vec3 origin = texture2D(uSource, vUv).rgb;
+    vec3 delta = 0.5 * (origin - backward);
 
     vec2 vel = texture2D(uVelocity, vUv).xy;
     vel.x /= uAspect * latScale(vUv.y);
     vec2 coord = wrapSphere(vUv - vel * uDt);
 
-    vec4 a = texture2D(uSource, wrapSphere(coord + vec2(-uTexel.x, -uTexel.y)));
-    vec4 b = texture2D(uSource, wrapSphere(coord + vec2(uTexel.x, -uTexel.y)));
-    vec4 c = texture2D(uSource, wrapSphere(coord + vec2(-uTexel.x, uTexel.y)));
-    vec4 d = texture2D(uSource, wrapSphere(coord + vec2(uTexel.x, uTexel.y)));
-    vec4 lo = min(min(a, b), min(c, d));
-    vec4 hi = max(max(a, b), max(c, d));
+    vec3 a = texture2D(uSource, wrapSphere(coord + vec2(-uTexel.x, -uTexel.y))).rgb;
+    vec3 b = texture2D(uSource, wrapSphere(coord + vec2(uTexel.x, -uTexel.y))).rgb;
+    vec3 c = texture2D(uSource, wrapSphere(coord + vec2(-uTexel.x, uTexel.y))).rgb;
+    vec3 d = texture2D(uSource, wrapSphere(coord + vec2(uTexel.x, uTexel.y))).rgb;
 
-    gl_FragColor = clamp(corrected, lo, hi) * uDissipation;
+    // 한계는 '실제로 존재하는 색' 두 개로 잡는다.
+    //
+    // min(a,b,c,d)를 채널별로 구하면 R은 a에서, G는 c에서 오는 식으로 섞인 색이 나온다.
+    // 그건 이웃 어디에도 없던 색이고, 보정이 매 프레임 그쪽으로 끌려가며 쌓이면
+    // 흑백만 칠해도 초록·자홍 줄무늬가 생긴다. 밝기로 골라 색 전체를 통째로 쓴다.
+    vec3 lo = a;
+    vec3 hi = a;
+    float loL = luma(a);
+    float hiL = loL;
+    float bl = luma(b);
+    if (bl < loL) { lo = b; loL = bl; }
+    if (bl > hiL) { hi = b; hiL = bl; }
+    float cl = luma(c);
+    if (cl < loL) { lo = c; loL = cl; }
+    if (cl > hiL) { hi = c; hiL = cl; }
+    float dl = luma(d);
+    if (dl < loL) { lo = d; loL = dl; }
+    if (dl > hiL) { hi = d; hiL = dl; }
+
+    // 채널마다 따로 자르면 보정량이 R·G·B에서 달라져 색이 갈라진다.
+    // 흑백만 칠해도 경계에 무지개가 뜨는 게 그 증상이다.
+    // 가장 빡빡한 채널에 맞춰 보정 벡터 전체를 같은 비율로 줄인다 — 색상이 유지된다.
+    float scale = min(
+      min(
+        limitAxis(forward.r, delta.r, lo.r, hi.r),
+        limitAxis(forward.g, delta.g, lo.g, hi.g)
+      ),
+      limitAxis(forward.b, delta.b, lo.b, hi.b)
+    );
+    scale = clamp(scale, 0.0, 1.0);
+
+    gl_FragColor = vec4((forward + delta * scale) * uDissipation, 1.0);
   }
 `
 

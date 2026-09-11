@@ -25,6 +25,9 @@ const saving = ref(false)
 const failed = ref(false)
 const canUndo = ref(false)
 
+/** 유체 정착을 기다리는 한계 시간. 넘으면 지금 상태 그대로 굽는다. */
+const SETTLE_TIMEOUT_MS = 5000
+
 const PALETTE = [
   '#f2e8d5',
   '#1d1b19',
@@ -144,9 +147,12 @@ async function save(): Promise<void> {
   failed.value = false
   try {
     // 흐르는 중에 구우면 중간 상태가 박힌다. 멈출 때까지 기다린다.
-    const deadline = Date.now() + 5000
+    //
+    // requestAnimationFrame으로 기다리면 안 된다. 탭이 뒤에 있거나 창이 가려지면
+    // 콜백이 아예 안 와서 '저장 중…'에 영원히 걸린다. setTimeout은 느려질 뿐 멈추지 않는다.
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS
     while (scene.fluidRunning && Date.now() < deadline) {
-      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await new Promise((resolve) => setTimeout(resolve, 50))
     }
     scene.syncFluidCanvas()
     const [fluid, brush] = await Promise.all([

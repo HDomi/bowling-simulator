@@ -8,8 +8,14 @@
 export const PAINT_WIDTH = 1024
 export const PAINT_HEIGHT = 512
 
-/** WebP 인코딩 품질. 해상도를 올린 만큼 압축 자국도 커져 조금 높였다. */
-export const PAINT_QUALITY = 0.92
+/**
+ * 무손실 WebP 품질 값.
+ *
+ * 손실 압축은 YUV로 바꾸고 색차를 절반 해상도로 줄인다. 저장했다 불러와 다시 섞으면
+ * 그 색차 오차가 흐름을 타고 늘어나 무지개 줄무늬가 된다. 흑백만 칠해도 생긴다.
+ * 페인팅은 편집 원본이므로 무손실로 굽는다.
+ */
+export const PAINT_QUALITY = 1
 
 /** 브러시 반경(UV 비율)의 허용 범위. */
 export const BRUSH_RADIUS = { min: 0.006, max: 0.09, step: 0.002, default: 0.024 } as const

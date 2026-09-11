@@ -15,7 +15,7 @@ let deck: PinDeckPhysics
 beforeAll(async () => {
   deck = new PinDeckPhysics()
   await deck.init()
-}, 30000)
+})
 
 /**
  * 핀덱 진입 상태를 만든다.

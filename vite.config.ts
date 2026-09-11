@@ -20,5 +20,12 @@ export default defineConfig(({ command, isPreview }) => ({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    /**
+     * 물리 테스트는 Rapier를 수천 스텝 돌린다. 개발기에서 1~2초 걸리는 것이
+     * CI 러너에서는 몇 배가 되고, vitest 기본값 5초를 넘기면 배포가 막힌다.
+     * 시간 초과는 단언 실패와 달리 코드가 깨진 것처럼 보여 원인을 찾기도 어렵다.
+     */
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 }))

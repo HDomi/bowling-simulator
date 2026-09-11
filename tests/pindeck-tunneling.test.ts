@@ -54,7 +54,7 @@ let deck: PinDeckPhysics
 beforeAll(async () => {
   deck = new PinDeckPhysics()
   await deck.init()
-}, 30000)
+})
 
 /**
  * 공을 던지고 정지할 때까지 밟은 뒤 넘어진 핀을 센다.
@@ -73,7 +73,12 @@ function roll(entry: ReturnType<typeof entryAt>): number {
   return deck.pinsDown().length
 }
 
-// 복합 곡면 충돌체로 수십 회 투구하는 두 묶음만 60초를 허용한다.
+/**
+ * 조합을 수십 개 도는 두 테스트만 따로 더 준다.
+ * 빠른 개발기에서도 20초 가까이 걸려 전역 30초로는 모자란다.
+ */
+const SWEEP_TIMEOUT = 180_000
+
 describe('핀덱 터널링', () => {
   it('포켓으로 들어가면 핀이 넘어진다', () => {
     expect(roll(entryAt(17.5, 15, 4))).toBeGreaterThan(0)
@@ -103,7 +108,7 @@ describe('핀덱 터널링', () => {
       }
     }
     expect(zeros).toEqual([])
-  }, 60000)
+  }, SWEEP_TIMEOUT)
 })
 
 describe('핀덱 인계 지점', () => {
@@ -172,5 +177,5 @@ describe('실제 시뮬 경로로 굴리기', () => {
       }
     }
     expect(zeros).toEqual([])
-  }, 60000)
+  }, SWEEP_TIMEOUT)
 })

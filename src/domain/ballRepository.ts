@@ -76,6 +76,38 @@ export async function closeConnection(): Promise<void> {
   dbPromise = null
 }
 
+/**
+ * 저장용 순수 객체로 바꾼다.
+ *
+ * 스토어의 볼은 Vue reactive Proxy다. IndexedDB는 structured clone으로 값을 복사하는데
+ * Proxy는 복사할 수 없어 `put`이 그대로 던진다. 필드를 꺼내 새 객체를 만들어 넘긴다.
+ *
+ * @param {Ball} ball - 볼(리액티브일 수 있다)
+ * @returns {Ball} 순수 객체
+ */
+export function toStoredBall(ball: Ball): Ball {
+  return {
+    id: ball.id,
+    name: ball.name,
+    weightLb: ball.weightLb,
+    rg: ball.rg,
+    diff: ball.diff,
+    intDiff: ball.intDiff,
+    cover: ball.cover,
+    grit: ball.grit,
+    pinToCg: ball.pinToCg,
+    layout: ball.layout
+      ? {
+          drillAngle: ball.layout.drillAngle,
+          pinToPap: ball.layout.pinToPap,
+          valAngle: ball.layout.valAngle,
+        }
+      : undefined,
+    colors: [ball.colors[0], ball.colors[1]],
+    hasPaint: ball.hasPaint,
+  }
+}
+
 export type LoadedBalls = {
   balls: Ball[]
   activeId: string
@@ -117,7 +149,7 @@ export async function loadBalls(): Promise<LoadedBalls> {
  */
 export async function putBall(ball: Ball): Promise<boolean> {
   try {
-    await (await db()).put('balls', ball)
+    await (await db()).put('balls', toStoredBall(ball))
     return true
   } catch {
     return false
@@ -146,12 +178,14 @@ export async function saveBalls(balls: Ball[], activeId: string): Promise<boolea
       }
     }
     for (const ball of balls) {
-      await ballStore.put(ball)
+      await ballStore.put(toStoredBall(ball))
     }
     await tx.objectStore('meta').put({ key: ACTIVE_ID_KEY, value: activeId })
     await tx.done
     return true
-  } catch {
+  } catch (error) {
+    // 조용히 넘기면 저장이 안 되는 것을 아무도 모른다.
+    console.error('[balls] 저장 실패', error)
     return false
   }
 }
@@ -194,9 +228,16 @@ export async function loadPaint(ballId: string): Promise<BallPaint | null> {
  */
 export async function savePaint(paint: BallPaint): Promise<boolean> {
   try {
-    await (await db()).put('paints', paint)
+    await (await db()).put('paints', {
+      ballId: paint.ballId,
+      fluid: paint.fluid,
+      brush: paint.brush,
+      baseColor: paint.baseColor,
+      updatedAt: paint.updatedAt,
+    })
     return true
-  } catch {
+  } catch (error) {
+    console.error('[paints] 저장 실패', error)
     return false
   }
 }

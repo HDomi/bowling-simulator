@@ -1,11 +1,10 @@
 import {
   clearCanvas,
-  composite,
   createPaintCanvas,
-  fillCanvas,
   stampDot,
   strokeLine,
 } from '@/domain/paintTexture'
+import { FluidSim } from '@/scene/FluidSim'
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -26,7 +25,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 /** 편집 모드. */
-export type PaintMode = 'orbit' | 'fill' | 'brush'
+export type PaintMode = 'orbit' | 'fill' | 'brush' | 'drop' | 'smudge'
 
 export type PaintStroke = {
   color: string
@@ -36,6 +35,35 @@ export type PaintStroke = {
 const BALL_RADIUS = 1
 /** 되돌리기 스택 크기. 브러시 레이어만 쌓는다. */
 const UNDO_LIMIT = 10
+
+/**
+ * 물방울 반경 = 브러시 반경 × 이 값.
+ *
+ * 물방울은 찍은 자리에서 더 퍼지므로 브러시와 같은 수치를 쓰면 훨씬 크게 보인다.
+ */
+const DROP_RADIUS_SCALE = 0.85
+
+/** 손가락 반경 배율. 브러시보다 굵으면 결이 뭉개진다. */
+const SMUDGE_RADIUS_SCALE = 0.8
+
+/** 끌면서 물방울을 흘릴 때의 최소 간격(반경 배수). */
+const DROP_SPACING = 1.6
+
+/**
+ * 이음매를 넘는 최단 UV 거리를 잰다.
+ * @param {{ u: number, v: number }} a - 시작
+ * @param {{ u: number, v: number }} b - 끝
+ * @returns {number} 거리
+ */
+function uvDistance(a: { u: number; v: number }, b: { u: number; v: number }): number {
+  let du = b.u - a.u
+  if (du > 0.5) {
+    du -= 1
+  } else if (du < -0.5) {
+    du += 1
+  }
+  return Math.hypot(du, b.v - a.v)
+}
 
 /**
  * 볼 표면에 직접 칠하는 편집 씬.
@@ -53,12 +81,13 @@ export class PaintScene {
   private pointer = new Vector2()
   private animFrame = 0
 
-  /** 아래 레이어. 배경색과 (v2에서) 유체. */
+  /** 아래 레이어. GPU에서 도는 유체를 저장할 때만 이 캔버스로 읽어 낸다. */
   readonly fluid = createPaintCanvas('#b8532f')
   /** 위 레이어. 브러시 선. 대부분 투명하다. */
   readonly brush = createPaintCanvas()
-  private merged = createPaintCanvas()
-  private texture: CanvasTexture
+  private brushTexture: CanvasTexture
+  private sim: FluidSim
+  private clock = 0
 
   private mode: PaintMode = 'orbit'
   private stroke: PaintStroke = { color: '#f2e8d5', radius: 0.024 }
@@ -90,22 +119,38 @@ export class PaintScene {
     sun.position.set(-3, 4, 5)
     this.scene.add(sun)
 
-    composite(this.fluid, this.brush, this.merged)
-    this.texture = new CanvasTexture(this.merged)
-    this.texture.colorSpace = SRGBColorSpace
+    this.sim = new FluidSim(this.renderer)
+    this.sim.reset('#b8532f')
+
+    this.brushTexture = new CanvasTexture(this.brush)
+    this.brushTexture.colorSpace = SRGBColorSpace
 
     // 페인팅이 그대로 보여야 하므로 껍질은 불투명하고 반사도 낮게 둔다.
-    this.ball = new Mesh(
-      new SphereGeometry(BALL_RADIUS, 96, 64),
-      new MeshPhysicalMaterial({
-        map: this.texture,
-        roughness: 0.32,
-        metalness: 0,
-        clearcoat: 0.5,
-        clearcoatRoughness: 0.25,
-        envMapIntensity: 0.6,
-      }),
-    )
+    const material = new MeshPhysicalMaterial({
+      map: this.sim.texture,
+      roughness: 0.32,
+      metalness: 0,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.25,
+      envMapIntensity: 0.6,
+    })
+    // 브러시 레이어를 유체 위에 얹는다. 합성용 캔버스를 매 프레임 다시 그리는 것보다
+    // 셰이더에서 한 번 섞는 편이 싸다.
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uBrush = { value: this.brushTexture }
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform sampler2D uBrush;',
+        )
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+           vec4 brushTexel = texture2D(uBrush, vMapUv);
+           diffuseColor.rgb = mix(diffuseColor.rgb, brushTexel.rgb, brushTexel.a);`,
+        )
+    }
+    this.ball = new Mesh(new SphereGeometry(BALL_RADIUS, 96, 64), material)
     this.scene.add(this.ball)
 
     canvas.addEventListener('pointerdown', this.onPointerDown)
@@ -140,8 +185,31 @@ export class PaintScene {
    * @param {string} color - 배경색
    */
   fillBase(color: string): void {
-    fillCanvas(this.fluid, color)
-    this.refresh()
+    this.sim.reset(color)
+  }
+
+  /**
+   * 저장된 유체 레이어를 이어받는다.
+   * @param {HTMLCanvasElement} source - 불러온 이미지가 그려진 캔버스
+   */
+  loadFluid(source: HTMLCanvasElement): void {
+    const texture = new CanvasTexture(source)
+    texture.colorSpace = SRGBColorSpace
+    texture.needsUpdate = true
+    this.sim.loadFrom(texture)
+    texture.dispose()
+  }
+
+  /**
+   * 지금 유체 상태를 저장용 캔버스로 읽어 낸다. 저장 직전에만 부른다.
+   */
+  syncFluidCanvas(): void {
+    this.sim.readToCanvas(this.fluid)
+  }
+
+  /** 유체가 아직 흐르는 중인지. 저장 전에 정착을 기다릴 때 쓴다. */
+  get fluidRunning(): boolean {
+    return this.sim.running
   }
 
   /**
@@ -176,8 +244,7 @@ export class PaintScene {
    * 두 레이어를 다시 합성해 볼에 반영한다.
    */
   refresh(): void {
-    composite(this.fluid, this.brush, this.merged)
-    this.texture.needsUpdate = true
+    this.brushTexture.needsUpdate = true
     this.onChange?.()
   }
 
@@ -205,7 +272,8 @@ export class PaintScene {
     this.controls.dispose()
     this.ball.geometry.dispose()
     this.ball.material.dispose()
-    this.texture.dispose()
+    this.brushTexture.dispose()
+    this.sim.dispose()
     this.renderer.dispose()
   }
 
@@ -242,7 +310,21 @@ export class PaintScene {
     if (!hit?.uv) {
       return null
     }
+    // 캔버스 좌표계로 돌려준다 — 위가 v=0. 브러시 레이어가 그 기준이다.
     return { u: hit.uv.x, v: 1 - hit.uv.y }
+  }
+
+  /**
+   * 캔버스 기준 UV를 유체 버퍼 기준으로 뒤집는다.
+   *
+   * 렌더 타깃은 아래에서 위로(v=0이 아래) 쌓인다. 캔버스는 반대다.
+   * 이걸 안 뒤집으면 클릭한 곳의 위아래 반대편에 물방울이 떨어진다.
+   *
+   * @param {{ u: number, v: number }} uv - 캔버스 기준 UV
+   * @returns {{ u: number, v: number }} 유체 버퍼 기준 UV
+   */
+  private toFluidUv(uv: { u: number; v: number }): { u: number; v: number } {
+    return { u: uv.u, v: 1 - uv.v }
   }
 
   private onPointerDown = (event: PointerEvent): void => {
@@ -257,6 +339,18 @@ export class PaintScene {
       this.fillBase(this.stroke.color)
       return
     }
+    if (this.mode === 'drop') {
+      // 누른 채 끌면 스포이트처럼 계속 떨어진다.
+      this.drawing = true
+      this.lastUv = uv
+      this.dropAt(uv)
+      return
+    }
+    if (this.mode === 'smudge') {
+      this.drawing = true
+      this.lastUv = uv
+      return
+    }
     if (this.mode !== 'brush') {
       return
     }
@@ -268,7 +362,40 @@ export class PaintScene {
   }
 
   private onPointerMove = (event: PointerEvent): void => {
-    if (!this.drawing || this.mode !== 'brush') {
+    if (!this.drawing) {
+      return
+    }
+    if (this.mode === 'drop') {
+      const next = this.uvAt(event)
+      if (!next) {
+        this.lastUv = null
+        return
+      }
+      // 간격을 두지 않으면 한 자리에 수십 번 찍혀 한 덩어리가 된다.
+      const gap = this.lastUv ? uvDistance(this.lastUv, next) : Infinity
+      if (gap >= this.stroke.radius * DROP_SPACING) {
+        this.dropAt(next)
+        this.lastUv = next
+      }
+      return
+    }
+    if (this.mode === 'smudge') {
+      const next = this.uvAt(event)
+      if (!next) {
+        this.lastUv = null
+        return
+      }
+      if (this.lastUv) {
+        this.sim.smudge(
+          this.toFluidUv(this.lastUv),
+          this.toFluidUv(next),
+          this.stroke.radius * SMUDGE_RADIUS_SCALE,
+        )
+      }
+      this.lastUv = next
+      return
+    }
+    if (this.mode !== 'brush') {
       return
     }
     const uv = this.uvAt(event)
@@ -284,6 +411,22 @@ export class PaintScene {
     }
     this.lastUv = uv
     this.refresh()
+  }
+
+  /**
+   * 한 지점에 물방울을 떨어뜨린다.
+   * @param {{ u: number, v: number }} uv - 캔버스 기준 UV
+   */
+  private dropAt(uv: { u: number; v: number }): void {
+    const fluid = this.toFluidUv(uv)
+    this.sim.drop(fluid.u, fluid.v, this.stroke.color, this.stroke.radius * DROP_RADIUS_SCALE)
+  }
+
+  /**
+   * 볼을 무작위로 돌려 색을 섞는다.
+   */
+  mixColors(): void {
+    this.sim.startSpin()
   }
 
   private onPointerUp = (): void => {
@@ -312,6 +455,16 @@ export class PaintScene {
 
   private loop = (): void => {
     this.animFrame = requestAnimationFrame(this.loop)
+    const now = performance.now() / 1000
+    const dt = this.clock ? Math.min(now - this.clock, 0.1) : 1 / 60
+    this.clock = now
+
+    this.sim.step(dt)
+    // 유체는 핑퐁이라 패스마다 텍스처 객체가 바뀐다. 재질을 지금 것에 다시 묶는다.
+    // 이걸 빼면 저장해 둔 페인팅을 불러와도 화면에는 직전 버퍼가 남는다.
+    if (this.ball.material.map !== this.sim.texture) {
+      this.ball.material.map = this.sim.texture
+    }
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }

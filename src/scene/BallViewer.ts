@@ -15,6 +15,7 @@ import {
   ACESFilmicToneMapping,
   AmbientLight,
   BufferGeometry,
+  CanvasTexture,
   Color,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -81,6 +82,10 @@ export class BallViewer {
   private animFrame = 0
   private ballGroup = new Group()
   private shell: Mesh<SphereGeometry, MeshPhysicalMaterial>
+  /** 사용자가 칠한 페인팅. 없으면 절차적 텍스처를 쓴다. */
+  private paint: HTMLCanvasElement | null = null
+  /** 페인팅의 배경색. 코어 보색을 여기서 뽑는다. */
+  private paintBase: string | null = null
   private core: Mesh<SphereGeometry, MeshStandardMaterial>
   private coreWire: Mesh<SphereGeometry, MeshStandardMaterial>
   private axes: LineSegments
@@ -192,6 +197,11 @@ export class BallViewer {
    * @param {Ball} ball - 볼
    */
   setLook(ball: BallLook): void {
+    if (this.paint) {
+      // 페인팅이 있으면 커버·그릿이 바뀌어도 칠한 그림을 그대로 다시 얹는다.
+      this.setPaintTexture(this.paint, ball, this.paintBase)
+      return
+    }
     const previous = this.shell.material
     this.shell.material = this.makeShellMaterial(ball)
     disposeBallMaterial(previous)
@@ -199,11 +209,45 @@ export class BallViewer {
   }
 
   /**
+   * 사용자가 칠한 페인팅을 껍질에 입힌다. null이면 절차적 텍스처로 되돌린다.
+   *
+   * 껍질이 반투명이라 페인팅을 얹어도 코어는 그대로 비친다.
+   *
+   * @param {HTMLCanvasElement | null} paint - 합성된 페인팅 캔버스
+   * @param {BallLook} look - 볼 외관
+   * @param {string | null} baseColor - 페인팅 배경색. 코어 보색의 기준이 된다.
+   */
+  setPaintTexture(
+    paint: HTMLCanvasElement | null,
+    look: BallLook,
+    baseColor: string | null = null,
+  ): void {
+    this.paint = paint
+    this.paintBase = paint ? baseColor : null
+
+    const material = this.makeShellMaterial(look)
+    if (paint) {
+      material.map?.dispose()
+      const texture = new CanvasTexture(paint)
+      texture.colorSpace = SRGBColorSpace
+      material.map = texture
+      material.color.set('#ffffff')
+      material.emissiveIntensity = 0
+      material.needsUpdate = true
+    }
+    const previous = this.shell.material
+    this.shell.material = material
+    disposeBallMaterial(previous)
+    this.applyCoreColor(look)
+  }
+
+  /**
    * 코어를 껍질 기본색의 보색으로 칠한다.
    * @param {BallLook} look - 볼 외관
    */
   private applyCoreColor(look: BallLook): void {
-    const base = complementaryColor(look.colors[0])
+    // 페인팅을 입혔으면 겉에 실제로 보이는 색은 페인팅 배경색이다.
+    const base = complementaryColor(this.paintBase ?? look.colors[0])
     this.core.material.color.copy(base)
     this.core.material.emissive.copy(base)
     this.core.material.emissiveIntensity = 0.22

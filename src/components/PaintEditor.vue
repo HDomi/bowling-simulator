@@ -51,6 +51,7 @@ async function mountScene(): Promise<void> {
   if (saved) {
     await drawBlob(saved.fluid, instance.fluid)
     await drawBlob(saved.brush, instance.brush)
+    instance.loadFluid(instance.fluid)
     baseColor.value = saved.baseColor
   } else {
     // 처음 여는 볼은 지금 색을 배경으로 깔아 준다.
@@ -109,6 +110,13 @@ function pickColor(color: string): void {
 }
 
 /**
+ * 볼을 무작위로 돌려 색을 섞는다.
+ */
+function mix(): void {
+  scene?.mixColors()
+}
+
+/**
  * 브러시 획을 되돌린다.
  */
 function undo(): void {
@@ -135,6 +143,12 @@ async function save(): Promise<void> {
   saving.value = true
   failed.value = false
   try {
+    // 흐르는 중에 구우면 중간 상태가 박힌다. 멈출 때까지 기다린다.
+    const deadline = Date.now() + 5000
+    while (scene.fluidRunning && Date.now() < deadline) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+    scene.syncFluidCanvas()
     const [fluid, brush] = await Promise.all([
       encodeCanvas(scene.fluid),
       encodeCanvas(scene.brush),
@@ -196,6 +210,8 @@ function cancel(): void {
               { id: 'orbit' as const, label: '회전' },
               { id: 'fill' as const, label: '배경색' },
               { id: 'brush' as const, label: '브러시' },
+              { id: 'drop' as const, label: '물방울' },
+              { id: 'smudge' as const, label: '손가락' },
             ]"
             :key="tool.id"
             class="rounded-sm border px-2 py-1.5 font-ui text-xs"
@@ -214,14 +230,18 @@ function cancel(): void {
           {{
             mode === 'orbit'
               ? '드래그로 볼을 돌린다.'
-              : 'Ctrl(⌘)을 누르는 동안에는 볼이 돌아간다.'
+              : mode === 'drop'
+                ? '클릭한 자리에 색이 유체처럼 퍼진다. Ctrl(⌘)로 회전.'
+                : mode === 'smudge'
+                  ? '누른 채 휘저으면 색이 섞인다. Ctrl(⌘)로 회전.'
+                  : 'Ctrl(⌘)을 누르는 동안에는 볼이 돌아간다.'
           }}
         </p>
 
         <!-- 색 -->
         <div>
           <div class="mb-1 flex justify-between font-ui text-xs">
-            <span class="text-muted">{{ mode === 'fill' ? '배경색' : '브러시 색' }}</span>
+            <span class="text-muted">{{ mode === 'fill' ? '배경색' : mode === 'drop' ? '물방울 색' : '브러시 색' }}</span>
             <span class="font-mono text-ink">{{ mode === 'fill' ? baseColor : brushColor }}</span>
           </div>
           <div class="mb-2 grid grid-cols-8 gap-1">
@@ -244,11 +264,11 @@ function cancel(): void {
 
         <!-- 브러시 크기 -->
         <label
-          v-if="mode === 'brush'"
+          v-if="mode === 'brush' || mode === 'drop' || mode === 'smudge'"
           class="block"
         >
           <span class="flex justify-between font-ui text-xs">
-            <span class="text-muted">굵기</span>
+            <span class="text-muted">{{ mode === 'brush' ? '굵기' : '크기' }}</span>
             <span class="font-mono text-ink">{{ (brushRadius * 1000).toFixed(0) }}</span>
           </span>
           <input
@@ -261,6 +281,16 @@ function cancel(): void {
           >
         </label>
 
+        <button
+          class="rounded-sm border border-ink/20 px-2 py-2 font-ui text-xs text-ink"
+          @click="mix()"
+        >
+          섞기 · 볼을 무작위로 돌린다
+        </button>
+
+        <p class="font-ui text-[10px] text-muted">
+          되돌리기는 브러시 선에만 적용된다. 유체는 배경색을 다시 칠해 초기화한다.
+        </p>
         <div class="flex gap-1">
           <button
             class="flex-1 rounded-sm border border-ink/20 px-2 py-1.5 font-ui text-xs text-ink disabled:opacity-40"

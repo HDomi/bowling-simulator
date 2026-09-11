@@ -10,6 +10,7 @@ import {
   IN,
   LANE_LENGTH,
   LANE_WIDTH,
+  PIN_DECK_END,
 } from '@/domain/constants'
 import { boardToX } from '@/domain/physics/friction'
 import { physXToThree } from '@/scene/coords'
@@ -27,7 +28,6 @@ import {
   ShapeGeometry,
 } from 'three'
 
-const LANE_HI = 0xd9c59e
 const GUTTER_COLOR = 0xb4b59d
 const CREAM = 0x555e4c
 
@@ -174,8 +174,10 @@ export function createLane(): Group {
     roughness: 0.9,
     side: DoubleSide,
   })
-  const gutterZ = (LANE_LENGTH + APPROACH_LENGTH) / 2 - APPROACH_LENGTH / 2
-  const gutterLen = LANE_LENGTH + APPROACH_LENGTH
+  // 거터는 어프로치 끝에서 핀덱 끝까지 이어진다. 핀덱 옆에서 끊기면 핀이 설 자리가 아닌
+  // 곳까지 바닥이 되고, 피트 위까지 넘어가면 구덩이에 뚜껑을 덮는 꼴이 된다.
+  const gutterLen = PIN_DECK_END + APPROACH_LENGTH
+  const gutterZ = PIN_DECK_END - gutterLen / 2
   for (const side of [-1, 1]) {
     const gutter = new Mesh(new PlaneGeometry(GUTTER_WIDTH, gutterLen), gutterMat)
     gutter.rotation.x = -Math.PI / 2
@@ -187,15 +189,6 @@ export function createLane(): Group {
     gutter.receiveShadow = true
     group.add(gutter)
   }
-
-  const pinDeck = new Mesh(
-    new PlaneGeometry(LANE_WIDTH + GUTTER_WIDTH * 2, 4 * FT),
-    new MeshStandardMaterial({ color: LANE_HI, roughness: 0.5 }),
-  )
-  pinDeck.rotation.x = -Math.PI / 2
-  pinDeck.position.set(0, -0.001, LANE_LENGTH + 2 * FT)
-  pinDeck.receiveShadow = true
-  group.add(pinDeck)
 
   const arrowZ = ARROW_DISTANCE_FT * FT
   for (const board of ARROW_BOARDS) {

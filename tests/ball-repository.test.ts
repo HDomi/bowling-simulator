@@ -136,6 +136,36 @@ describe('깨진 데이터 방어', () => {
   })
 })
 
+describe('리액티브 객체 저장', () => {
+  it('Proxy로 감싼 볼도 저장된다', async () => {
+    // Vue reactive와 같은 형태의 Proxy. structured clone이 안 되는 값이다.
+    const raw = ball('프록시 볼')
+    const proxied = new Proxy(raw, {
+      get: (target, key) => Reflect.get(target, key),
+    })
+    const ok = await saveBalls([proxied], proxied.id)
+    expect(ok).toBe(true)
+
+    const loaded = await loadBalls()
+    expect(loaded.balls).toHaveLength(1)
+    expect(loaded.balls[0].name).toBe('프록시 볼')
+  })
+
+  it('중첩된 layout·colors도 순수 객체로 저장된다', async () => {
+    const raw = createBall({
+      name: '레이아웃 볼',
+      layout: { drillAngle: 45, pinToPap: 4.5, valAngle: 30 },
+    })
+    await saveBalls([raw], raw.id)
+    const loaded = await loadBalls()
+    expect(loaded.balls[0].layout).toEqual({
+      drillAngle: 45,
+      pinToPap: 4.5,
+      valAngle: 30,
+    })
+  })
+})
+
 describe('개수 제한', () => {
   it('상수가 5다', () => {
     expect(MAX_BALLS).toBe(5)

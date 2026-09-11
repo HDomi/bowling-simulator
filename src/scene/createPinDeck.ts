@@ -1,7 +1,10 @@
 import {
+  GUTTER_DEPTH,
+  GUTTER_WIDTH,
   KICKBACK_HEIGHT,
   KICKBACK_X,
   LANE_LENGTH,
+  LANE_WIDTH,
   PINSETTER,
   PIN_DECK_END,
   PIT_DEPTH,
@@ -31,11 +34,12 @@ const INNER_WIDTH = KICKBACK_X * 2
 export function createPinDeck(): Group {
   const group = new Group()
 
-  // 핀덱 바닥 — 레인과 같은 높이로 이어진다.
+  // 핀덱 바닥 — 레인과 같은 높이·폭으로 이어진다.
+  // 킥백까지 꽉 채우면 양옆 거터를 덮어 버린다. 거터는 여기서도 이어져야 한다.
   const deckLength = PIN_DECK_END - LANE_LENGTH
   const deck = outlined(
     new Mesh(
-      new BoxGeometry(INNER_WIDTH, 0.06, deckLength),
+      new BoxGeometry(LANE_WIDTH, 0.06, deckLength),
       new MeshToonMaterial({ color: DECK_COLOR }),
     ),
   )
@@ -53,15 +57,32 @@ export function createPinDeck(): Group {
   pit.position.set(0, -PIT_DEPTH - 0.03, PIN_DECK_END + pitLength / 2)
   group.add(pit)
 
-  // 핀덱 끝의 낙차면.
+  // 핀덱 끝의 낙차면. 레인 폭과 거터를 따로 만든다 —
+  // 거터 쪽 윗변이 레인과 같은 높이면 홈으로 굴러온 공이 벽에 막힌다.
   const drop = outlined(
     new Mesh(
-      new BoxGeometry(INNER_WIDTH, PIT_DEPTH, 0.05),
+      new BoxGeometry(LANE_WIDTH, PIT_DEPTH, 0.05),
       new MeshToonMaterial({ color: PIT_COLOR }),
     ),
   )
   drop.position.set(0, -PIT_DEPTH / 2, PIN_DECK_END + 0.025)
   group.add(drop)
+
+  const gutterDropHeight = PIT_DEPTH - GUTTER_DEPTH
+  for (const side of [-1, 1]) {
+    const gutterDrop = outlined(
+      new Mesh(
+        new BoxGeometry(GUTTER_WIDTH, gutterDropHeight, 0.05),
+        new MeshToonMaterial({ color: PIT_COLOR }),
+      ),
+    )
+    gutterDrop.position.set(
+      side * (LANE_WIDTH / 2 + GUTTER_WIDTH / 2),
+      -GUTTER_DEPTH - gutterDropHeight / 2,
+      PIN_DECK_END + 0.025,
+    )
+    group.add(gutterDrop)
+  }
 
   // 킥백 — 핀덱 시작부터 피트 끝까지 양옆을 막는다.
   const wallLength = PIT_END - LANE_LENGTH

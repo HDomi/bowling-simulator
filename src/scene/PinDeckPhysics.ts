@@ -1,16 +1,19 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 import {
   BALL_RADIUS,
-  IN,
   DEFAULT_BALL_WEIGHT_LB,
+  GUTTER_DEPTH,
+  GUTTER_WIDTH,
+  IN,
   KICKBACK_HEIGHT,
   KICKBACK_X,
   LANE_LENGTH,
+  LANE_WIDTH,
   PINSETTER,
+  PIN_BASE_RADIUS,
   PIN_DECK_END,
   PIN_DOWN_TILT_DEG,
   PIN_HEIGHT,
-  PIN_BASE_RADIUS,
   PIN_MASS,
   PIN_PHYSICS,
   PIN_SETTLE_MAX_S,
@@ -555,16 +558,47 @@ export class PinDeckPhysics {
     }
 
     // 핀덱 바닥. 공이 인계되는 지점보다 조금 앞에서 시작한다.
+    // 폭은 레인과 같다. 양옆은 거터 홈이라 한 단 낮다.
     const deckStart = LANE_LENGTH - 0.6
     const deckLength = PIN_DECK_END - deckStart
-    add(KICKBACK_X, 0.03, deckLength / 2, 0, -0.03, deckStart + deckLength / 2, 0.45, 0.12)
+    add(LANE_WIDTH / 2, 0.03, deckLength / 2, 0, -0.03, deckStart + deckLength / 2, 0.45, 0.12)
+
+    // 거터 홈 바닥. 보이는 것과 높이가 같아야 핀이 허공에 서지 않는다.
+    for (const side of [-1, 1]) {
+      add(
+        GUTTER_WIDTH / 2, 0.03, deckLength / 2,
+        side * (LANE_WIDTH / 2 + GUTTER_WIDTH / 2),
+        -GUTTER_DEPTH - 0.03,
+        deckStart + deckLength / 2,
+        0.45, 0.1,
+      )
+    }
+
+    // 레인과 거터 사이의 턱. 핀이 홈으로 굴러 들어갈 수는 있어도 벽은 있어야 한다.
+    for (const side of [-1, 1]) {
+      add(
+        0.01, GUTTER_DEPTH / 2, deckLength / 2,
+        side * (LANE_WIDTH / 2 + 0.01), -GUTTER_DEPTH / 2, deckStart + deckLength / 2,
+        0.3, 0.1,
+      )
+    }
 
     // 피트 바닥. 여기 떨어진 핀과 공은 다시 올라오지 않는다.
     const pitLength = PIT_END - PIN_DECK_END
     add(KICKBACK_X, 0.03, pitLength / 2, 0, -PIT_DEPTH - 0.03, PIN_DECK_END + pitLength / 2, 0.7, 0.02)
 
-    // 핀덱 끝 낙차면.
-    add(KICKBACK_X, PIT_DEPTH / 2, 0.025, 0, -PIT_DEPTH / 2, PIN_DECK_END + 0.025, 0.4, 0.1)
+    // 핀덱 끝 낙차면. 거터 쪽은 홈 바닥 높이에서 떨어진다.
+    add(LANE_WIDTH / 2, PIT_DEPTH / 2, 0.025, 0, -PIT_DEPTH / 2, PIN_DECK_END + 0.025, 0.4, 0.1)
+    const gutterDropHalf = (PIT_DEPTH - GUTTER_DEPTH) / 2
+    for (const side of [-1, 1]) {
+      add(
+        GUTTER_WIDTH / 2, gutterDropHalf, 0.025,
+        side * (LANE_WIDTH / 2 + GUTTER_WIDTH / 2),
+        -GUTTER_DEPTH - gutterDropHalf,
+        PIN_DECK_END + 0.025,
+        0.4, 0.1,
+      )
+    }
 
     // 킥백 — 핀을 안쪽으로 되튕긴다. 실제 볼링장처럼 잘 튀게 반발을 높인다.
     // 충돌체는 보이는 벽보다 두껍게 잡는다. 얇으면 빠른 핀이 뚫고 나간다.

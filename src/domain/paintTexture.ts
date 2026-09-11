@@ -1,9 +1,15 @@
-/** 페인팅 텍스처 해상도. 볼 표면에서 이 정도면 충분하고 저장도 가볍다. */
-export const PAINT_WIDTH = 512
-export const PAINT_HEIGHT = 256
+/**
+ * 페인팅 텍스처 해상도.
+ *
+ * 볼이 화면을 가득 채우면 정면에 보이는 건 경도 90° 남짓, 즉 가로의 1/4뿐이다.
+ * 512폭이면 그 자리에 128텍셀만 깔려 확대되면서 계단이 보인다. 1024로 올렸다.
+ * 실측 저장 용량이 볼당 1.5 KB였으므로 네 배가 돼도 부담이 없다.
+ */
+export const PAINT_WIDTH = 1024
+export const PAINT_HEIGHT = 512
 
-/** WebP 인코딩 품질. */
-export const PAINT_QUALITY = 0.85
+/** WebP 인코딩 품질. 해상도를 올린 만큼 압축 자국도 커져 조금 높였다. */
+export const PAINT_QUALITY = 0.92
 
 /** 브러시 반경(UV 비율)의 허용 범위. */
 export const BRUSH_RADIUS = { min: 0.006, max: 0.09, step: 0.002, default: 0.024 } as const
